@@ -373,6 +373,7 @@ def get_finra_token():
                 "Content-Type":  "application/x-www-form-urlencoded",
                 "Accept":        "application/json",
             },
+            data=b"",  # empty body forces POST — grant_type is in URL query string
         )
         token = resp.get("access_token") or resp.get("token")
         if token:
