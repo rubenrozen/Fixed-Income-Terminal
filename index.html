@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIXED INCOME TERMINAL — Global Bond Market Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;700;800&family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#080c10;--bg2:#0d1117;--bg3:#111820;--bg4:#1a2333;
+    --border:#1e2d3d;--border2:#243447;
+    --text:#c9d1d9;--text2:#8b949e;--text3:#4a5568;
+    --amber:#f5a623;--green:#3fb950;--red:#f85149;
+    --blue:#58a6ff;--cyan:#39c5cf;--purple:#bc8cff;--teal:#1abc9c;
+    --heading:#e6edf3;--glow-a:rgba(245,166,35,0.12);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;font-size:12px;line-height:1.5;min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");opacity:0.4;}
+  body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:998;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);}
+ 
+  /* ── HEADER ── */
+  header{border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;background:rgba(8,12,16,0.97);backdrop-filter:blur(12px);}
+  .header-top{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px;}
+  .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:15px;color:var(--amber);letter-spacing:0.15em;text-transform:uppercase;}
+  .logo span{color:var(--text2);font-weight:400;}
+  .header-right{display:flex;gap:16px;align-items:center;font-size:11px;color:var(--text2);}
+  .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s ease-in-out infinite;}
+  .live-dot.stale{background:var(--amber);box-shadow:0 0 8px var(--amber);}
+  .live-dot.error{background:var(--red);box-shadow:0 0 8px var(--red);animation:none;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  .refresh-btn{padding:4px 10px;border-radius:3px;background:none;border:1px solid var(--border2);color:var(--text2);font-size:10px;font-family:'Space Mono',monospace;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase;transition:all 0.15s;}
+  .refresh-btn:hover{border-color:var(--amber);color:var(--amber);}
+  .data-status{font-size:10px;}
+  .header-nav{display:flex;padding:0 24px;overflow-x:auto;}
+  .nav-btn{padding:10px 16px;background:none;border:none;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.08em;color:var(--text3);border-bottom:2px solid transparent;text-transform:uppercase;transition:all 0.15s;white-space:nowrap;}
+  .nav-btn:hover{color:var(--text);}
+  .nav-btn.active{color:var(--amber);border-bottom-color:var(--amber);}
+ 
+  /* ── TICKER ── */
+  .ticker-strip{background:var(--bg3);border-bottom:1px solid var(--border);overflow:hidden;height:34px;display:flex;align-items:center;}
+  .ticker-scroll{display:flex;gap:0;animation:tickerScroll 40s linear infinite;white-space:nowrap;}
+  @keyframes tickerScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+  .ticker-item{padding:0 20px;display:flex;gap:8px;align-items:center;border-right:1px solid var(--border);height:34px;}
+  .ticker-name{color:var(--text2);font-size:11px;}
+  .ticker-val{color:var(--heading);font-size:11px;font-weight:700;}
+  .ticker-chg{font-size:10px;}
+ 
+  /* ── LAYOUT ── */
+  .main{padding:20px 24px;max-width:1800px;margin:0 auto;}
+  .section-label{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+  .section-label::after{content:'';flex:1;height:1px;background:var(--border);}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
+  .section{margin-bottom:28px;}
+  .page-section{display:none;}
+  .page-section.active{display:block;}
+ 
+  /* ── PANELS ── */
+  .panel{background:var(--bg2);border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+  .panel-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg3);}
+  .panel-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--heading);display:flex;align-items:center;gap:8px;}
+  .panel-sub{font-size:10px;color:var(--text3);}
+  .panel-body{padding:0;}
+  .chart-wrap{padding:16px;position:relative;}
+  .chart-wrap canvas{display:block;}
+ 
+  /* ── STAT CARDS ── */
+  .stat-card{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:4px;position:relative;}
+  .stat-label{font-size:9px;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;}
+  .stat-val{font-family:'Bebas Neue',sans-serif;font-size:42px;letter-spacing:0.06em;color:var(--heading);line-height:1;margin:3px 0;}
+  .stat-chg{font-size:11px;font-family:'DM Mono',monospace;font-weight:500;}
+  .stat-source{font-size:8px;color:var(--text3);margin-top:2px;letter-spacing:0.05em;}
+ 
+  /* ── TABLES ── */
+  .bond-table{width:100%;border-collapse:collapse;}
+  .bond-table thead tr{background:var(--bg4);}
+  .bond-table th{padding:7px 10px;text-align:right;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .bond-table th:first-child{text-align:left;}
+  .bond-table td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--border);font-size:11px;color:var(--text);}
+  .bond-table td:first-child{text-align:left;}
+  .bond-table tbody tr:last-child td{border-bottom:none;}
+  .bond-table tbody tr:hover{background:var(--bg4);}
+  .bond-table .row-group td{background:rgba(26,35,51,0.5);color:var(--text2);font-size:10px;letter-spacing:0.05em;padding:5px 10px;}
+  .t-name{color:var(--heading);font-weight:700;}
+  .t-val{color:var(--heading);font-variant-numeric:tabular-nums;}
+  .t-pos{color:var(--green);}
+  .t-neg{color:var(--red);}
+  .t-neu{color:var(--text2);}
+  .badge{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;}
+  .badge-up{background:rgba(63,185,80,0.15);color:var(--green);}
+  .badge-down{background:rgba(248,81,73,0.15);color:var(--red);}
+ 
+  /* ── TABS ── */
+  .tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--bg3);}
+  .tab{padding:8px 14px;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;font-family:'Space Mono',monospace;transition:all 0.15s;}
+  .tab:hover{color:var(--text);}
+  .tab.active{color:var(--cyan);border-bottom-color:var(--cyan);}
+ 
+  /* ── YIELD CURVE CONTROLS ── */
+  .yield-controls{display:flex;gap:8px;padding:12px 14px;flex-wrap:wrap;border-bottom:1px solid var(--border);background:var(--bg3);}
+  .geo-btn{padding:4px 10px;border-radius:3px;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;border:1px solid var(--border2);background:none;font-family:'Space Mono',monospace;color:var(--text2);transition:all 0.15s;}
+  .geo-btn:hover{border-color:var(--text2);color:var(--text);}
+  .geo-btn.active{border-color:var(--amber);color:var(--amber);background:var(--glow-a);}
+ 
+  /* ── HEATMAP ── */
+  .heatmap-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;padding:16px;}
+  .heatmap-header{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;padding:0 16px;margin-bottom:4px;}
+  .hm-label{font-size:9px;text-align:center;color:var(--text3);letter-spacing:0.04em;}
+  .hm-row-label{font-size:9px;color:var(--text3);text-align:right;padding-right:8px;}
+  .hm-cell{height:36px;border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s;position:relative;overflow:hidden;}
+  .hm-cell:hover{transform:scale(1.08);z-index:10;box-shadow:0 4px 20px rgba(0,0,0,0.5);}
+  .hm-cell span{font-size:8px;line-height:1.2;text-align:center;font-weight:700;}
+  .hm-cell .hm-sub{font-size:7px;opacity:0.75;}
+  .hm-legend{display:flex;gap:16px;padding:8px 16px 14px;flex-wrap:wrap;}
+  .legend-item{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--text2);}
+  .legend-dot{width:8px;height:8px;border-radius:2px;}
+ 
+  /* ── GOV CONTROLS ── */
+  .gov-controls{display:flex;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);background:var(--bg3);flex-wrap:wrap;align-items:center;}
+  .gov-check{display:flex;align-items:center;gap:5px;font-size:10px;cursor:pointer;user-select:none;}
+  .check-dot{width:10px;height:10px;border-radius:2px;}
+ 
+  /* ── HM TOOLTIP ── */
+  .hm-tooltip{position:fixed;background:var(--bg4);border:1px solid var(--border2);border-radius:5px;padding:8px 12px;pointer-events:none;z-index:500;font-size:10px;color:var(--text);display:none;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
+  .hm-tooltip strong{color:var(--heading);display:block;margin-bottom:2px;}
+ 
+  /* ── INFO BUTTON ── */
+  .info-wrap{position:relative;display:inline-flex;align-items:center;z-index:10;}
+  .info-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:rgba(88,166,255,0.10);border:1px solid rgba(88,166,255,0.28);color:var(--blue);font-size:9px;font-family:'Syne',sans-serif;font-weight:800;cursor:help;transition:all 0.15s;flex-shrink:0;user-select:none;line-height:1;}
+  .info-btn:hover,.info-wrap:hover .info-btn{background:rgba(88,166,255,0.20);border-color:var(--blue);box-shadow:0 0 8px rgba(88,166,255,0.35);}
+  .info-popup{position:absolute;z-index:900;top:calc(100% + 8px);left:50%;transform:translateX(-50%) translateY(4px) scale(0.97);transform-origin:top center;width:290px;background:#0b1929;border:1px solid rgba(88,166,255,0.45);border-radius:7px;padding:13px 15px;box-shadow:0 16px 48px rgba(0,0,0,0.75);pointer-events:none;opacity:0;transition:opacity 0.18s ease,transform 0.18s ease;font-family:'Space Mono',monospace;font-size:10px;line-height:1.65;color:var(--text);white-space:normal;}
+  .info-popup::before{content:'';position:absolute;top:-5px;left:50%;transform:translateX(-50%) rotate(45deg);width:8px;height:8px;background:#0b1929;border-left:1px solid rgba(88,166,255,0.45);border-top:1px solid rgba(88,166,255,0.45);}
+  .info-popup.pop-left{left:0;transform:translateX(0) translateY(4px) scale(0.97);transform-origin:top left;}
+  .info-popup.pop-left::before{left:14px;transform:translateX(0) rotate(45deg);}
+  .info-popup.pop-right{left:auto;right:0;transform:translateX(0) translateY(4px) scale(0.97);transform-origin:top right;}
+  .info-popup.pop-right::before{left:auto;right:14px;transform:translateX(0) rotate(45deg);}
+  .info-wrap:hover .info-popup{opacity:1;transform:translateX(-50%) translateY(0) scale(1);}
+  .info-wrap:hover .info-popup.pop-left{transform:translateX(0) translateY(0) scale(1);}
+  .info-wrap:hover .info-popup.pop-right{transform:translateX(0) translateY(0) scale(1);}
+  .info-popup strong{display:block;color:var(--blue);font-family:'Syne',sans-serif;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:7px;font-weight:700;}
+  .info-popup p{color:var(--text2);margin-bottom:5px;}
+  .info-popup p:last-child{margin-bottom:0;}
+  .info-popup b{color:var(--amber);}
+ 
+  /* ── EMPTY / LOADING STATES ── */
+  .loading-overlay{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;gap:12px;color:var(--text3);}
+  .loading-spinner{width:24px;height:24px;border:2px solid var(--border2);border-top-color:var(--amber);border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .no-data{display:flex;align-items:center;justify-content:center;padding:32px;color:var(--text3);font-size:11px;gap:8px;}
+  .no-data-icon{font-size:20px;opacity:0.4;}
+  .err-banner{background:rgba(248,81,73,0.08);border:1px solid rgba(248,81,73,0.2);border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:11px;color:var(--red);display:flex;align-items:flex-start;gap:10px;}
+  .warn-banner{background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.2);border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:11px;color:var(--amber);display:flex;align-items:flex-start;gap:10px;}
+  .source-tag{display:inline-block;padding:1px 6px;border-radius:3px;background:rgba(88,166,255,0.1);color:var(--blue);font-size:8px;letter-spacing:0.05em;margin-left:6px;}
+ 
+  .fade-in{animation:fadeIn 0.4s ease forwards;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+ 
+  @media(max-width:1200px){.grid-4{grid-template-columns:1fr 1fr;}}
+  @media(max-width:800px){.grid-2,.grid-4{grid-template-columns:1fr;}.heatmap-grid{grid-template-columns:repeat(5,1fr);}}
+</style>
+</head>
+<body>
+ 
+<header>
+  <div class="header-top">
+    <div class="logo">Fixed Income Terminal <span>/ Global Bond Market</span></div>
+    <div class="header-right">
+      <span id="data-status" class="data-status" style="color:var(--text3)">Loading…</span>
+      <span style="color:var(--border2)">|</span>
+      <span id="live-time">--:--:-- UTC</span>
+      <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+    </div>
+  </div>
+  <nav class="header-nav">
+    <button class="nav-btn active" onclick="showSection('us',this)">🇺🇸 US Markets</button>
+    <button class="nav-btn" onclick="showSection('eu',this)">🇪🇺 EU Markets</button>
+    <button class="nav-btn" onclick="showSection('cn',this)">🇨🇳 China Markets</button>
+    <button class="nav-btn" onclick="showSection('jp',this)">🇯🇵 Japan Markets</button>
+    <button class="nav-btn" onclick="showSection('curves',this)">Yield Curves</button>
+    <button class="nav-btn" onclick="showSection('derivatives',this)">Derivatives</button>
+    <button class="nav-btn" onclick="showSection('govbonds',this)">Gov Bonds</button>
+  </nav>
+</header>
+ 
+<div class="ticker-strip"><div class="ticker-scroll" id="ticker-scroll">
+  <div class="ticker-item"><span class="ticker-name">Loading market data…</span></div>
+</div></div>
+ 
+<div class="hm-tooltip" id="hm-tooltip"></div>
+ 
+<div class="main" id="main-content">
+  <div class="loading-overlay" id="global-loading">
+    <div class="loading-spinner"></div>
+    <span>Fetching live bond market data…</span>
+  </div>
+</div>
+ 
+<script>
+/* ══════════════════════════════════════
+   STATE
+══════════════════════════════════════ */
+let DATA = null;          // bonds.json content
+let currentSection = 'us';
+let yieldChart = null, spreadChartInst = null, govChart = null, oiChartInst = null;
+let activeYieldGeos = [];
+ 
+const $ = id => document.getElementById(id);
+const fmt = (v, d=2) => (v != null ? Number(v).toFixed(d) : '—');
+const fmtBps = v => v != null ? Math.round(v) + ' bps' : '—';
+const na = () => `<span class="t-neu">—</span>`;
+ 
+Chart.defaults.color = '#8b949e';
+Chart.defaults.borderColor = '#1e2d3d';
+Chart.defaults.font.family = "'DM Mono', monospace";
+Chart.defaults.font.size = 10;
+ 
+/* ── CLOCK ── */
+function updateClock(){$('live-time').textContent=new Date().toUTCString().split(' ')[4]+' UTC';}
+setInterval(updateClock,1000); updateClock();
+ 
+/* ── SMART POPUP POSITION ── */
+document.addEventListener('mouseenter', e => {
+  const w = e.target.closest && e.target.closest('.info-wrap');
+  if (!w) return;
+  const p = w.querySelector('.info-popup');
+  if (!p) return;
+  p.classList.remove('pop-left','pop-right');
+  const r = w.getBoundingClientRect();
+  if (r.left < 220) p.classList.add('pop-left');
+  else if (window.innerWidth - r.right < 300) p.classList.add('pop-right');
+}, true);
+ 
+/* ══════════════════════════════════════
+   DATA LOADING
+══════════════════════════════════════ */
+async function loadData() {
+  const status = $('data-status');
+  status.textContent = 'Loading…';
+  status.style.color = 'var(--text3)';
+  try {
+    const resp = await fetch(`data/bonds.json?t=${Date.now()}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    DATA = await resp.json();
+    renderAll();
+    // Status indicator
+    if (DATA.last_updated) {
+      const dt = new Date(DATA.last_updated);
+      const ageH = (Date.now() - dt.getTime()) / 36e5;
+      const dot = '<span class="live-dot' + (ageH > 72 ? ' stale' : '') + '"></span> ';
+      const label = dt.toLocaleDateString('en-GB', {day:'2-digit',month:'short'}) + ' ' + dt.toUTCString().split(' ')[4];
+      status.innerHTML = dot + 'Last update: ' + label;
+    } else {
+      status.innerHTML = '<span class="live-dot error"></span> No data yet — run GitHub Actions workflow';
+    }
+    const errors = DATA.errors || {};
+    if (Object.keys(errors).length) {
+      const noPlaceholder = Object.keys(errors).filter(k => k !== '_placeholder');
+      if (noPlaceholder.length)
+        status.innerHTML += ` &nbsp;·&nbsp; <span style="color:var(--amber)">${noPlaceholder.length} source(s) partial</span>`;
+    }
+  } catch(e) {
+    console.error(e);
+    status.innerHTML = '<span class="live-dot error"></span> Failed to load data';
+    $('main-content').innerHTML = `
+      <div class="err-banner">
+        <span>⚠</span>
+        <div><b>Cannot load bond data.</b><br>
+        Make sure <code>data/bonds.json</code> exists in the repo and the GitHub Actions workflow has run at least once.<br>
+        You can trigger it manually: GitHub → Actions → "Update Bond Market Data" → Run workflow.</div>
+      </div>`;
+  }
+}
+ 
+/* ══════════════════════════════════════
+   RENDER ALL
+══════════════════════════════════════ */
+function renderAll() {
+  $('main-content').innerHTML = buildHTML();
+  renderTicker();
+  // Reinit charts for current section
+  setTimeout(() => initChartsForSection(currentSection), 60);
+}
+ 
+function buildHTML() {
+  return `
+    ${buildErrorBanners()}
+    <!-- US -->
+    <div class="page-section ${currentSection==='us'?'active':''}" id="sec-us">
+      <div class="section">
+        <div class="section-label">US Bond Market — Overview</div>
+        <div class="grid-4">${buildUSKPIs()}</div>
+      </div>
+      <div class="section">
+        <div class="section-label">Agency Bond Market</div>
+        <div class="grid-2">
+          ${buildPanel('Securities Overview','Daily Volume · $M notional','pop-left',INFO.agencySec,buildFinraAgencyTable())}
+          ${buildPanel('Trade Type Breakdown','Buy / Sell / Inter-dealer','pop-right',INFO.tradeTypes,buildFinraTradeTable())}
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Corporate 144A Bond Market</div>
+        <div class="grid-2">
+          ${buildPanel('Securities Overview','Daily Volume · $M notional','pop-left',INFO.corp144a,buildCorpTable())}
+          ${buildPanel('Trade Type Breakdown','Buy / Sell / Inter-dealer','pop-right',INFO.tradeTypes,buildCorpTradeTable())}
+        </div>
+      </div>
+    </div>
+    <!-- EU -->
+    <div class="page-section ${currentSection==='eu'?'active':''}" id="sec-eu">
+      <div class="section">
+        <div class="section-label">EU Bond Market — Overview</div>
+        <div class="grid-4">${buildEUKPIs()}</div>
+      </div>
+      <div class="section">
+        <div class="section-label">EU Government &amp; Corporate Bonds</div>
+        <div class="grid-2">
+          ${buildPanel('EU Yield Curve','ECB Statistical Data Warehouse','pop-left',INFO.euSec,buildECBTable())}
+          ${buildPanel('EURIBOR &amp; Key Rates','Short-term EU rates','pop-right',INFO.tradeTypes,'<div class="no-data"><span class="no-data-icon">📊</span>ECB rates table — see Yield Curves section</div>')}
+        </div>
+      </div>
+    </div>
+    <!-- CN -->
+    <div class="page-section ${currentSection==='cn'?'active':''}" id="sec-cn">
+      <div class="section">
+        <div class="section-label">China Bond Market — Overview</div>
+        <div class="grid-4">${buildCNKPIs()}</div>
+      </div>
+      <div class="section">
+        <div class="section-label">China Interbank &amp; Exchange Bond Market</div>
+        <div class="grid-2">
+          ${buildPanel('Market Overview','ADB Asian Bonds Online · CCDC','pop-left',INFO.cnSec,buildChinaTable())}
+          ${buildPanel('Data Sources','ADB / CCDC / World Bank','pop-right',INFO.tradeTypes,buildChinaSourcesCard())}
+        </div>
+      </div>
+    </div>
+    <!-- JP -->
+    <div class="page-section ${currentSection==='jp'?'active':''}" id="sec-jp">
+      <div class="section">
+        <div class="section-label">Japan Bond Market — Overview</div>
+        <div class="grid-4">${buildJPKPIs()}</div>
+      </div>
+      <div class="section">
+        <div class="section-label">JGB &amp; Corporate Bond Market</div>
+        <div class="grid-2">
+          ${buildPanel('JGB Yield Curve','Bank of Japan official data','pop-left',INFO.jpSec,buildBOJTable())}
+          ${buildPanel('Trade Type Breakdown','BOJ published statistics','pop-right',INFO.tradeTypes,'<div class="no-data"><span class="no-data-icon">📊</span>Granular BOJ trade data not available via free API — see Gov Bonds section</div>')}
+        </div>
+      </div>
+    </div>
+    <!-- CURVES -->
+    <div class="page-section ${currentSection==='curves'?'active':''}" id="sec-curves">
+      <div class="section">
+        <div class="section-label">Yield Curve — Short vs Long Term</div>
+        <div class="panel fade-in">
+          <div class="panel-header">
+            <span class="panel-title">Government Yield Curve ${infoBtn(INFO.yieldCurve,'pop-left')}</span>
+            <span class="panel-sub">Sources: US Treasury · ECB SDW · BOJ · UK DMO</span>
+          </div>
+          <div class="yield-controls" id="yield-geo-controls"></div>
+          <div class="chart-wrap" style="height:340px"><canvas id="yieldCurveChart"></canvas></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">2Y–10Y Spread History</div>
+        <div class="panel fade-in">
+          <div class="panel-header">
+            <span class="panel-title">Spread Evolution ${infoBtn(INFO.spread2y10y,'pop-left')}</span>
+            <span class="panel-sub">Source: FRED (T10Y2Y) — monthly observations</span>
+          </div>
+          <div class="chart-wrap" style="height:260px"><canvas id="spreadChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <!-- DERIVATIVES -->
+    <div class="page-section ${currentSection==='derivatives'?'active':''}" id="sec-derivatives">
+      <div class="section">
+        <div class="section-label">Options &amp; Futures — Market Structure</div>
+        <div class="panel fade-in" style="margin-bottom:16px">
+          <div class="panel-header">
+            <span class="panel-title">Futures Curve — Contango / Backwardation ${infoBtn(INFO.futures,'pop-left')}</span>
+            <span class="panel-sub">Price · Roll Spread · Color = structure</span>
+          </div>
+          <div class="tab-bar">
+            <button class="tab active" onclick="switchFuturesTab('ust',this)">US Treasury</button>
+            <button class="tab" onclick="switchFuturesTab('bund',this)">Bund</button>
+            <button class="tab" onclick="switchFuturesTab('jgb',this)">JGB</button>
+            <button class="tab" onclick="switchFuturesTab('gilt',this)">Gilt</button>
+          </div>
+          <div id="futures-heatmap-container">
+            <div class="heatmap-header" id="hm-col-labels"></div>
+            <div style="display:flex;align-items:flex-start">
+              <div id="hm-row-labels" style="display:flex;flex-direction:column;gap:2px;padding:16px 0 16px 16px;min-width:90px;"></div>
+              <div class="heatmap-grid" id="heatmap-cells" style="flex:1;padding-left:0;padding-right:16px;"></div>
+            </div>
+            <div class="hm-legend" id="hm-legend"></div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="panel fade-in">
+            <div class="panel-header">
+              <span class="panel-title">Vol Surface — Swaption Matrix ${infoBtn(INFO.volSurface,'pop-left')}</span>
+              <span class="panel-sub">ATM Normal Vol · bps</span>
+            </div>
+            <div id="vol-surface-container">
+              <div class="heatmap-header" id="vs-col-labels"></div>
+              <div style="display:flex;align-items:flex-start">
+                <div id="vs-row-labels" style="display:flex;flex-direction:column;gap:2px;padding:12px 0 12px 14px;min-width:70px;"></div>
+                <div id="vol-surface-cells" style="display:grid;gap:2px;flex:1;padding:12px 14px 12px 0;"></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel fade-in">
+            <div class="panel-header">
+              <span class="panel-title">Open Interest &amp; Volume ${infoBtn(INFO.oi,'pop-right')}</span>
+              <span class="panel-sub">Futures contracts · 10Y equiv.</span>
+            </div>
+            <div class="chart-wrap" style="height:220px"><canvas id="oiChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- GOV BONDS -->
+    <div class="page-section ${currentSection==='govbonds'?'active':''}" id="sec-govbonds">
+      <div class="section">
+        <div class="section-label">Government Bond Yield Curves — Multi-Country</div>
+        <div class="panel fade-in">
+          <div class="panel-header">
+            <span class="panel-title">Sovereign Yield Curves ${infoBtn(INFO.govMulti,'pop-left')}</span>
+            <span class="panel-sub">Sources: US Treasury · ECB · BOJ · UK DMO</span>
+          </div>
+          <div class="gov-controls" id="gov-controls"></div>
+          <div class="chart-wrap" style="height:380px"><canvas id="govBondsChart"></canvas></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">10Y Spread vs US Treasury</div>
+        <div class="panel fade-in">
+          <div class="panel-header">
+            <span class="panel-title">Sovereign Spread Matrix ${infoBtn(INFO.spreadMatrix,'pop-left')}</span>
+            <span class="panel-sub">bps over UST 10Y</span>
+          </div>
+          <div class="panel-body"><table class="bond-table" id="spread-matrix-table"></table></div>
+        </div>
+      </div>
+    </div>`;
+}
+ 
+/* ── HTML HELPERS ── */
+function infoBtn(info, pos='pop-left') {
+  return `<span class="info-wrap"><span class="info-btn">i</span><div class="info-popup ${pos}"><strong>${info.title}</strong>${info.body}</div></span>`;
+}
+function buildPanel(title, sub, pos, info, body) {
+  return `<div class="panel fade-in">
+    <div class="panel-header">
+      <span class="panel-title">${title} ${infoBtn(info,pos)}</span>
+      <span class="panel-sub">${sub}</span>
+    </div>
+    <div class="panel-body">${body}</div>
+  </div>`;
+}
+function noData(msg='No live data available') {
+  return `<div class="no-data"><span class="no-data-icon">📡</span>${msg}</div>`;
+}
+function buildErrorBanners() {
+  if (!DATA) return '';
+  const errs = DATA.errors || {};
+  const keys = Object.keys(errs).filter(k => k !== '_placeholder');
+  if (!keys.length) return '';
+  return `<div class="warn-banner"><span>⚠</span><div>
+    <b>Partial data</b> — ${keys.length} source(s) unavailable: <b>${keys.join(', ')}</b><br>
+    Check GitHub Secrets (FRED_API_KEY, FINRA_API_KEY) and re-run the workflow.
+  </div></div>`;
+}
+ 
+/* ══════════════════════════════════════
+   US SECTION BUILDERS
+══════════════════════════════════════ */
+function buildUSKPIs() {
+  const fred = DATA?.fred || {};
+  const ust  = DATA?.us_treasury || {};
+  const finra = DATA?.finra || {};
+ 
+  // Find 10Y yield
+  const t10idx = (ust.tenors || []).indexOf('10Y');
+  const y10 = t10idx >= 0 ? ust.yields[t10idx] : null;
+  const t2idx = (ust.tenors || []).indexOf('2Y');
+  const y2 = t2idx >= 0 ? ust.yields[t2idx] : null;
+ 
+  const cards = [
+    { label:'UST 10Y Yield',    val: y10 != null ? fmt(y10,2)+'%' : '—', chg: fred.t10y2y != null ? (fred.t10y2y > 0 ? '▲' : '▼') + fmt(Math.abs(fred.t10y2y),2)+'% 2Y-10Y spread' : '', src:'US Treasury', pos: y10 != null },
+    { label:'IG OAS Spread',    val: fred.ig_spread_bps != null ? fmtBps(fred.ig_spread_bps) : '—', chg: fred.ig_date || '', src:'FRED BAMLC0A0CM', pos: true },
+    { label:'HY OAS Spread',    val: fred.hy_spread_bps != null ? fmtBps(fred.hy_spread_bps) : '—', chg: fred.hy_date || '', src:'FRED BAMLH0A0HYM2', pos: true },
+    { label:'SOFR',             val: fred.sofr != null ? fmt(fred.sofr,2)+'%' : '—', chg: fred.sofr_date || '', src:'FRED SOFR', pos: true },
+  ];
+  return cards.map(c => `<div class="stat-card">
+    <div class="stat-label">${c.label}</div>
+    <div class="stat-val">${c.val}</div>
+    <div class="stat-chg ${c.pos?'t-pos':'t-neg'}">${c.chg}</div>
+    <div class="stat-source">${c.src}</div>
+  </div>`).join('');
+}
+ 
+function buildFinraAgencyTable() {
+  const f = DATA?.finra;
+  if (!f || !f.agency || !Object.keys(f.agency).length) return noData('FINRA API key required — see README');
+  const a = f.agency;
+  const date = f.date ? `<div style="padding:8px 10px;font-size:9px;color:var(--text3)">Week ending ${f.date}</div>` : '';
+  return date + `<table class="bond-table"><thead><tr>
+    <th>Issuer</th><th>Buy Vol $M</th><th>Sell Vol $M</th><th>Inter-dealer $M</th><th>Trades</th>
+  </tr></thead><tbody>
+    <tr>
+      <td class="t-name">All Agency</td>
+      <td class="t-val">${a.buy_volume_mm != null ? fmt(a.buy_volume_mm,0) : '—'}</td>
+      <td class="t-val">${a.sell_volume_mm != null ? fmt(a.sell_volume_mm,0) : '—'}</td>
+      <td class="t-val">${a.interdealer_vol_mm != null ? fmt(a.interdealer_vol_mm,0) : '—'}</td>
+      <td class="t-val">${a.trade_count || '—'}</td>
+    </tr>
+    ${buildIssuerRows(f.agency_issuers || {})}
+  </tbody></table>`;
+}
+ 
+function buildIssuerRows(issuers) {
+  if (!Object.keys(issuers).length) return '';
+  return Object.entries(issuers).slice(0,6).map(([name, vol]) =>
+    `<tr><td class="t-name" style="padding-left:20px;font-size:10px">${name}</td>
+     <td class="t-val">${vol != null ? fmt(vol,0) : '—'}</td>
+     <td colspan="3"></td></tr>`
+  ).join('');
+}
+ 
+function buildFinraTradeTable() {
+  const f = DATA?.finra;
+  if (!f || !f.agency) return noData('FINRA API key required — see README');
+  const rows = [
+    {cat:'Affiliate',    rows:[{name:'Buy',k:'buy_volume_mm'},{name:'Sell',k:'sell_volume_mm'},{name:'Net',k:null}]},
+    {cat:'Inter-dealer', rows:[{name:'Volume',k:'interdealer_vol_mm'}]},
+  ];
+  let html = `<table class="bond-table"><thead><tr>
+    <th>Category</th><th>Side</th><th>Volume $M</th><th>Trades</th>
+  </tr></thead><tbody>`;
+  const a = f.agency || {};
+  rows.forEach(cat => {
+    html += `<tr class="row-group"><td colspan="4">${cat.cat}</td></tr>`;
+    cat.rows.forEach(r => {
+      const vol = r.k ? (a[r.k] != null ? fmt(a[r.k],0) : '—') :
+        (a.buy_volume_mm != null && a.sell_volume_mm != null) ? fmt(a.buy_volume_mm - a.sell_volume_mm, 0) : '—';
+      html += `<tr><td></td><td class="t-name">${r.name}</td><td class="t-val">${vol}</td><td class="t-val">${r.name==='Volume'?(a.trade_count||'—'):'—'}</td></tr>`;
+    });
+  });
+  html += '</tbody></table>';
+  return html;
+}
+ 
+function buildCorpTable() {
+  const f = DATA?.finra;
+  if (!f) return noData('FINRA API key required');
+  const ig = f.corp_ig || {}, hy = f.corp_hy || {};
+  return `<table class="bond-table"><thead><tr>
+    <th>Segment</th><th>Buy Vol $M</th><th>Sell Vol $M</th><th>Inter-dealer $M</th>
+  </tr></thead><tbody>
+    <tr><td class="t-name">Investment Grade</td>
+      <td class="t-val">${ig.buy_volume_mm != null ? fmt(ig.buy_volume_mm,0) : '—'}</td>
+      <td class="t-val">${ig.sell_volume_mm != null ? fmt(ig.sell_volume_mm,0) : '—'}</td>
+      <td class="t-val">${ig.interdealer_vol_mm != null ? fmt(ig.interdealer_vol_mm,0) : '—'}</td>
+    </tr>
+    <tr><td class="t-name">High Yield</td>
+      <td class="t-val">${hy.buy_volume_mm != null ? fmt(hy.buy_volume_mm,0) : '—'}</td>
+      <td class="t-val">${hy.sell_volume_mm != null ? fmt(hy.sell_volume_mm,0) : '—'}</td>
+      <td class="t-val">${hy.interdealer_vol_mm != null ? fmt(hy.interdealer_vol_mm,0) : '—'}</td>
+    </tr>
+  </tbody></table>`;
+}
+ 
+function buildCorpTradeTable() { return buildFinraTradeTable(); }
+ 
+/* ══════════════════════════════════════
+   EU SECTION
+══════════════════════════════════════ */
+function buildEUKPIs() {
+  const ecb = DATA?.ecb || {};
+  const i10 = (ecb.tenors||[]).indexOf('10Y');
+  const i2  = (ecb.tenors||[]).indexOf('2Y');
+  const y10 = i10>=0 ? ecb.yields[i10] : null;
+  const y2  = i2 >=0 ? ecb.yields[i2]  : null;
+  const cards = [
+    {label:'Bund 10Y Yield', val: y10!=null?fmt(y10,2)+'%':'—', chg:'ECB AAA Curve', src:'ECB SDW', pos:true},
+    {label:'EURIBOR 3M',     val: ecb.euribor_3m!=null?fmt(ecb.euribor_3m,2)+'%':'—', chg:'European rates benchmark', src:'ECB SDW', pos:true},
+    {label:'EU 2Y Yield',    val: y2!=null?fmt(y2,2)+'%':'—',  chg:'Short end EU curve', src:'ECB SDW', pos:true},
+    {label:'10Y–2Y Spread',  val: y10!=null&&y2!=null?fmt(y10-y2,2)+'%':'—', chg:'EU term structure', src:'ECB SDW', pos:(y10-y2)>0},
+  ];
+  return cards.map(c=>`<div class="stat-card">
+    <div class="stat-label">${c.label}</div>
+    <div class="stat-val">${c.val}</div>
+    <div class="stat-chg ${c.pos?'t-pos':'t-neg'}">${c.chg}</div>
+    <div class="stat-source">${c.src}</div>
+  </div>`).join('');
+}
+ 
+function buildECBTable() {
+  const ecb = DATA?.ecb;
+  if (!ecb || !ecb.tenors || !ecb.tenors.length) return noData('ECB data not loaded');
+  return `<table class="bond-table"><thead><tr>
+    <th>Tenor</th><th>Yield (%)</th>
+  </tr></thead><tbody>
+  ${ecb.tenors.map((t,i) => `<tr>
+    <td class="t-name">${t}</td>
+    <td class="t-val">${ecb.yields[i]!=null?fmt(ecb.yields[i],3):'—'}</td>
+  </tr>`).join('')}
+  </tbody></table>`;
+}
+ 
+/* ══════════════════════════════════════
+   CN SECTION
+══════════════════════════════════════ */
+function buildCNKPIs() {
+  const cn = DATA?.china || {};
+  const wb = cn.wb_market_cap_gdp;
+  const cards = [
+    {label:'CGB 10Y Yield',    val:'—', chg:'ADB / CCDC', src:'ADB Asian Bonds Online', pos:true},
+    {label:'Market Cap/GDP',   val: wb ? fmt(wb.value,1)+'%' : '—', chg: wb ? wb.date : '', src:'World Bank', pos:true},
+    {label:'Policy Bank Bonds',val:'—', chg:'Outstanding volume', src:'CCDC chinabond.com.cn', pos:true},
+    {label:'Data Frequency',   val:'WEEKLY', chg:'Updated every Monday', src:'GitHub Actions', pos:true},
+  ];
+  return cards.map(c=>`<div class="stat-card">
+    <div class="stat-label">${c.label}</div>
+    <div class="stat-val">${c.val}</div>
+    <div class="stat-chg ${c.pos?'t-pos':'t-neg'}">${c.chg}</div>
+    <div class="stat-source">${c.src}</div>
+  </div>`).join('');
+}
+ 
+function buildChinaTable() {
+  const cn = DATA?.china;
+  if (!cn) return noData('China data not loaded');
+  const hasADB = cn.adb_yield || cn.adb_size;
+  const hasCCDC = cn.ccdc_raw_numbers && cn.ccdc_raw_numbers.length;
+  if (!hasADB && !hasCCDC) return noData('ADB / CCDC data unavailable — check network access from GitHub Actions');
+  let html = '<div style="padding:12px 14px">';
+  if (cn.wb_market_cap_gdp) {
+    const wb = cn.wb_market_cap_gdp;
+    html += `<div style="margin-bottom:8px;font-size:11px"><span class="t-name">Market Cap / GDP</span>
+      <span class="t-val" style="float:right">${wb.value?fmt(wb.value,1)+'%':'—'}</span>
+      <div style="font-size:9px;color:var(--text3)">World Bank · ${wb.date||''}</div></div>`;
+  }
+  if (cn.ccdc_raw_numbers) {
+    html += `<div style="margin-top:8px;font-size:9px;color:var(--text3)">CCDC raw indicators (${cn.ccdc_raw_numbers.length} fields parsed)</div>`;
+  }
+  html += '</div>';
+  return html;
+}
+ 
+function buildChinaSourcesCard() {
+  return `<div style="padding:14px;font-size:10px;line-height:1.8;color:var(--text2)">
+    <b style="color:var(--heading);display:block;margin-bottom:8px">Active China Data Sources</b>
+    <div>📊 <b style="color:var(--amber)">ADB Asian Bonds Online</b><br>
+    <span style="font-size:9px;color:var(--text3)">asianbondsonline.adb.org — yields, market size, outstanding. No key.</span></div>
+    <div style="margin-top:8px">📊 <b style="color:var(--amber)">CCDC (chinabond.com.cn)</b><br>
+    <span style="font-size:9px;color:var(--text3)">China Central Depository — weekly turnover. No key. May have CORS limits.</span></div>
+    <div style="margin-top:8px">📊 <b style="color:var(--amber)">World Bank</b><br>
+    <span style="font-size:9px;color:var(--text3)">GDP ratios, macro indicators. No key.</span></div>
+    <div style="margin-top:12px;padding:8px;background:rgba(245,166,35,0.06);border-radius:4px;font-size:9px;color:var(--text3)">
+    ⚠ Full CGB yield curve via ADB may require the server-side Python fetcher to run — CORS prevents browser-side fetch from these sources.</div>
+  </div>`;
+}
+ 
+/* ══════════════════════════════════════
+   JP SECTION
+══════════════════════════════════════ */
+function buildJPKPIs() {
+  const boj = DATA?.boj || {};
+  const i10 = (boj.tenors||[]).indexOf('10Y');
+  const y10  = i10>=0 ? boj.yields[i10] : null;
+  const cards = [
+    {label:'JGB 10Y Yield', val: y10!=null?fmt(y10,2)+'%':'—', chg:'Bank of Japan official', src:'BOJ Statistics', pos:true},
+    {label:'JGB 2Y Yield',  val: (() => {const i=(boj.tenors||[]).indexOf('2Y');return i>=0?fmt(boj.yields[i],2)+'%':'—';})(), chg:'Short end', src:'BOJ Statistics', pos:true},
+    {label:'JGB 30Y Yield', val: (() => {const i=(boj.tenors||[]).indexOf('30Y');return i>=0?fmt(boj.yields[i],2)+'%':'—';})(), chg:'Long end', src:'BOJ Statistics', pos:true},
+    {label:'Data Date',     val: boj.date ? boj.date.slice(0,7) : '—', chg:'Latest BOJ publication', src:'BOJ IR01 Series', pos:true},
+  ];
+  return cards.map(c=>`<div class="stat-card">
+    <div class="stat-label">${c.label}</div>
+    <div class="stat-val">${c.val}</div>
+    <div class="stat-chg">${c.chg}</div>
+    <div class="stat-source">${c.src}</div>
+  </div>`).join('');
+}
+ 
+function buildBOJTable() {
+  const boj = DATA?.boj;
+  if (!boj || !boj.tenors || !boj.tenors.length) return noData('BOJ data not loaded');
+  return `<table class="bond-table"><thead><tr>
+    <th>Tenor</th><th>Yield (%)</th>
+  </tr></thead><tbody>
+  ${boj.tenors.map((t,i)=>`<tr>
+    <td class="t-name">${t}</td>
+    <td class="t-val">${boj.yields[i]!=null?fmt(boj.yields[i],3):'—'}</td>
+  </tr>`).join('')}
+  </tbody></table>`;
+}
+ 
+/* ══════════════════════════════════════
+   TICKER — live yields
+══════════════════════════════════════ */
+function renderTicker() {
+  const ust = DATA?.us_treasury || {};
+  const ecb = DATA?.ecb || {};
+  const boj = DATA?.boj || {};
+  const fred = DATA?.fred || {};
+  const getY = (src, tenor) => {
+    const i = (src.tenors||[]).indexOf(tenor);
+    return i>=0 && src.yields[i]!=null ? fmt(src.yields[i],2)+'%' : '—';
+  };
+  const items = [
+    {n:'UST 10Y',  v:getY(ust,'10Y')}, {n:'UST 2Y',   v:getY(ust,'2Y')},
+    {n:'UST 30Y',  v:getY(ust,'30Y')}, {n:'Bund 10Y', v:getY(ecb,'10Y')},
+    {n:'JGB 10Y',  v:getY(boj,'10Y')}, {n:'SOFR',     v:fred.sofr?fmt(fred.sofr,2)+'%':'—'},
+    {n:'EURIBOR',  v:ecb.euribor_3m?fmt(ecb.euribor_3m,2)+'%':'—'},
+    {n:'IG Sprd',  v:fred.ig_spread_bps?fmtBps(fred.ig_spread_bps):'—'},
+    {n:'HY Sprd',  v:fred.hy_spread_bps?fmtBps(fred.hy_spread_bps):'—'},
+    {n:'2Y-10Y',   v:fred.t10y2y?fmt(fred.t10y2y,2)+'%':'—'},
+  ];
+  const ts = $('ticker-scroll');
+  const html = items.map(t=>`<div class="ticker-item">
+    <span class="ticker-name">${t.n}</span>
+    <span class="ticker-val">${t.v}</span>
+  </div>`).join('');
+  ts.innerHTML = html + html;
+}
+ 
+/* ══════════════════════════════════════
+   CHARTS
+══════════════════════════════════════ */
+const CC = {US:'#f5a623',EU:'#58a6ff',Japan:'#3fb950',UK:'#bc8cff',Germany:'#39c5cf'};
+const GOV_TENORS_LABELS = ['3M','1Y','2Y','5Y','10Y','20Y','30Y'];
+ 
+function buildGovDatasets() {
+  const ust = DATA?.us_treasury || {};
+  const ecb = DATA?.ecb || {};
+  const boj = DATA?.boj || {};
+  const datasets = [];
+  // Build US from Treasury data
+  if (ust.tenors) {
+    const map = Object.fromEntries(ust.tenors.map((t,i)=>[t,ust.yields[i]]));
+    const vals = GOV_TENORS_LABELS.map(t=>map[t]??null);
+    if (vals.some(v=>v!=null))
+      datasets.push({key:'US',label:'United States',color:'#f5a623',data:vals,active:true});
+  }
+  // EU from ECB
+  if (ecb.tenors) {
+    const map = Object.fromEntries(ecb.tenors.map((t,i)=>[t,ecb.yields[i]]));
+    const vals = GOV_TENORS_LABELS.map(t=>map[t]??null);
+    if (vals.some(v=>v!=null))
+      datasets.push({key:'EU',label:'EU (AAA)',color:'#58a6ff',data:vals,active:true});
+  }
+  // Japan from BOJ
+  if (boj.tenors) {
+    const map = Object.fromEntries(boj.tenors.map((t,i)=>[t,boj.yields[i]]));
+    const vals = GOV_TENORS_LABELS.map(t=>map[t]??null);
+    if (vals.some(v=>v!=null))
+      datasets.push({key:'JP',label:'Japan',color:'#3fb950',data:vals,active:true});
+  }
+  // UK from uk_gilts
+  if (DATA?.uk_gilts?.tenors) {
+    const g = DATA.uk_gilts;
+    const map = Object.fromEntries(g.tenors.map((t,i)=>[t,g.yields[i]]));
+    const vals = GOV_TENORS_LABELS.map(t=>map[t]??null);
+    if (vals.some(v=>v!=null))
+      datasets.push({key:'UK',label:'United Kingdom',color:'#bc8cff',data:vals,active:true});
+  }
+  return datasets;
+}
+ 
+let govDatasets = [];
+ 
+function renderGovControls() {
+  const c = $('gov-controls'); if(!c) return;
+  c.innerHTML = govDatasets.map(co=>`
+    <label class="gov-check" onclick="toggleCountry('${co.key}')">
+      <div class="check-dot" style="background:${co.active?co.color:'#333'};box-shadow:${co.active?`0 0 6px ${co.color}44`:'none'};border:1px solid ${co.active?co.color:'#444'}"></div>
+      <span style="color:${co.active?'var(--text)':'var(--text3)'}">${co.label}</span>
+    </label>`).join('');
+}
+function toggleCountry(key) {
+  const co = govDatasets.find(c=>c.key===key);
+  if(co){co.active=!co.active;renderGovControls();updateGovChart();}
+}
+function updateGovChart() {
+  if(!govChart) return;
+  govChart.data.datasets = govDatasets.filter(c=>c.active).map(c=>({
+    label:c.label,data:c.data,borderColor:c.color,backgroundColor:c.color+'15',
+    borderWidth:2.5,pointRadius:4,pointHoverRadius:7,tension:0.3,fill:false,
+    spanGaps:true,
+  }));
+  govChart.update('active');
+}
+ 
+function initGovChart() {
+  const ctx = $('govBondsChart'); if(!ctx||govChart) return;
+  govDatasets = buildGovDatasets();
+  govChart = new Chart(ctx,{type:'line',data:{labels:GOV_TENORS_LABELS,datasets:[]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',labels:{boxWidth:12,padding:14}},tooltip:{backgroundColor:'#1a2333',borderColor:'#243447',borderWidth:1,callbacks:{label:c=>`  ${c.dataset.label}: ${c.parsed.y!=null?c.parsed.y.toFixed(2)+'%':'—'}`}}},
+      scales:{x:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e'}},y:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e',callback:v=>v.toFixed(2)+'%'},title:{display:true,text:'Yield (%)',color:'#4a5568'}}}}});
+  renderGovControls(); updateGovChart();
+  renderSpreadMatrix();
+}
+ 
+function renderSpreadMatrix() {
+  const t = $('spread-matrix-table'); if(!t) return;
+  const usData = govDatasets.find(d=>d.key==='US');
+  if (!usData) { t.innerHTML = `<tr><td colspan="9">${noData('US Treasury data required')}</td></tr>`; return; }
+  const usT10idx = GOV_TENORS_LABELS.indexOf('10Y');
+  const usT10 = usData.data[usT10idx];
+  let html = `<thead><tr><th>Country</th>${GOV_TENORS_LABELS.map(l=>`<th>${l}</th>`).join('')}<th>vs UST 10Y</th></tr></thead><tbody>`;
+  govDatasets.forEach(co => {
+    const coT10 = co.data[usT10idx];
+    const spread = usT10!=null&&coT10!=null ? ((coT10-usT10)*100).toFixed(0) : null;
+    html += `<tr><td class="t-name">${co.label}</td>
+      ${co.data.map(v=>`<td class="t-val">${v!=null?fmt(v,2)+'%':'—'}</td>`).join('')}
+      <td class="${spread!=null?(+spread>=0?'t-pos':'t-neg'):'t-neu'}">${spread!=null?(+spread>=0?'+':'')+spread+' bps':'—'}</td>
+    </tr>`;
+  });
+  t.innerHTML = html + '</tbody>';
+}
+ 
+function buildYieldCurveDatasets() {
+  const sets = [];
+  const ust = DATA?.us_treasury;
+  if (ust?.tenors) {
+    sets.push({label:'US',data:ust.yields,borderColor:'#f5a623',backgroundColor:'#f5a62318',borderWidth:2,pointRadius:4,tension:0.3,fill:false,spanGaps:true});
+    activeYieldGeos.push('US');
+  }
+  const ecb = DATA?.ecb;
+  if (ecb?.tenors && ecb.tenors.length) {
+    // Align to US Treasury tenors for overlay
+    sets.push({label:'EU',data:ecb.tenors.map((t,i)=>ecb.yields[i]),borderColor:'#58a6ff',backgroundColor:'#58a6ff18',borderWidth:2,pointRadius:4,tension:0.3,fill:false,spanGaps:true});
+    activeYieldGeos.push('EU');
+  }
+  const boj = DATA?.boj;
+  if (boj?.tenors && boj.tenors.length) {
+    sets.push({label:'Japan',data:boj.tenors.map((t,i)=>boj.yields[i]),borderColor:'#3fb950',backgroundColor:'#3fb95018',borderWidth:2,pointRadius:4,tension:0.3,fill:false,spanGaps:true});
+  }
+  return sets;
+}
+ 
+function renderYieldControls() {
+  const c = $('yield-geo-controls'); if(!c) return;
+  const available = [];
+  if (DATA?.us_treasury?.tenors?.length) available.push({key:'US',color:'#f5a623'});
+  if (DATA?.ecb?.tenors?.length)         available.push({key:'EU',color:'#58a6ff'});
+  if (DATA?.boj?.tenors?.length)         available.push({key:'Japan',color:'#3fb950'});
+  c.innerHTML = available.map(g=>`<button class="geo-btn active" onclick="toggleYieldGeo('${g.key}')" style="border-color:${g.color};color:${g.color};background:${g.color}22">${g.key}</button>`).join('');
+}
+function toggleYieldGeo(g) {
+  if(activeYieldGeos.includes(g)) activeYieldGeos=activeYieldGeos.filter(x=>x!==g);
+  else activeYieldGeos.push(g);
+  // just refresh
+  if(yieldChart){yieldChart.data.datasets=yieldChart.data.datasets;yieldChart.update();}
+}
+ 
+function initYieldCurveChart() {
+  const ctx = $('yieldCurveChart'); if(!ctx||yieldChart) return;
+  const datasets = buildYieldCurveDatasets();
+  yieldChart = new Chart(ctx,{type:'line',data:{labels:DATA?.us_treasury?.tenors||[],datasets},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',labels:{boxWidth:12,padding:16}},tooltip:{backgroundColor:'#1a2333',borderColor:'#243447',borderWidth:1,callbacks:{label:c=>`  ${c.dataset.label}: ${c.parsed.y!=null?c.parsed.y.toFixed(2)+'%':'—'}`}}},
+      scales:{x:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e'}},y:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e',callback:v=>v.toFixed(2)+'%'},title:{display:true,text:'Yield (%)',color:'#4a5568'}}}}});
+  renderYieldControls();
+}
+ 
+function initSpreadChart() {
+  const ctx = $('spreadChart'); if(!ctx||spreadChartInst) return;
+  const fred = DATA?.fred;
+  if (!fred?.spread_history_labels) { ctx.parentElement.innerHTML = noData('FRED data required for spread history'); return; }
+  spreadChartInst = new Chart(ctx,{type:'line',
+    data:{labels:fred.spread_history_labels,datasets:[
+      {label:'US 2Y-10Y',data:fred.spread_history_us,borderColor:'#f5a623',
+       fill:{target:'origin',above:'rgba(245,166,35,0.05)',below:'rgba(248,81,73,0.12)'},
+       borderWidth:2,tension:0.3,pointRadius:2},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',labels:{boxWidth:12}},tooltip:{backgroundColor:'#1a2333',borderColor:'#243447',borderWidth:1}},
+      scales:{x:{grid:{color:'#1e2d3d'},ticks:{maxTicksLimit:12,color:'#8b949e'}},y:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e',callback:v=>v.toFixed(2)+'%'},title:{display:true,text:'Spread (%)',color:'#4a5568'}}}}});
+}
+ 
+/* Derivatives — heatmap (illustrative roll structure — no free real-time source exists) */
+const FUTURES_TENORS=['2Y','3Y','5Y','7Y','10Y','20Y','30Y','Ultra T','Bund','JGB'];
+const CONTRACT_MONTHS=['Mar25','Jun25','Sep25','Dec25','Mar26','Jun26','Sep26','Dec26','Mar27','Jun27'];
+function heatColor(v,mn,mx){if(v>0){const t=Math.min(v/mx,1);return`rgba(63,185,80,${0.15+t*0.65})`;}else{const t=Math.min(Math.abs(v)/Math.abs(mn),1);return`rgba(248,81,73,${0.15+t*0.65})`;}}
+function renderHeatmap(type){
+  const SEED=type==='ust'?100.12:type==='bund'?135.48:type==='jgb'?149.2:98.4;
+  const data=[];
+  for(let r=0;r<FUTURES_TENORS.length;r++){const row=[];for(let c=0;c<CONTRACT_MONTHS.length;c++){const spread=+(((Math.random()-0.52)*0.6+(c*0.04)+(r>4?-0.05:0.02)).toFixed(3));const price=+(SEED-(r*2.1)+c*0.04+(Math.random()-0.5)*0.08).toFixed(3);row.push({price,spread});}data.push(row);}
+  $('hm-col-labels').innerHTML='<div style="min-width:90px"></div>'+CONTRACT_MONTHS.map(m=>`<div class="hm-label">${m}</div>`).join('');
+  $('hm-row-labels').innerHTML=FUTURES_TENORS.map(t=>`<div class="hm-row-label" style="height:38px;line-height:36px">${t}</div>`).join('');
+  const cells=$('heatmap-cells');cells.style.gridTemplateColumns=`repeat(${CONTRACT_MONTHS.length},1fr)`;cells.innerHTML='';
+  const spreads=data.flat().map(x=>x.spread),minS=Math.min(...spreads),maxS=Math.max(...spreads);
+  data.forEach((row,ri)=>row.forEach((cell,ci)=>{
+    const div=document.createElement('div');div.className='hm-cell';div.style.background=heatColor(cell.spread,minS,maxS);
+    const isC=cell.spread>=0;
+    div.innerHTML=`<span>${cell.price}</span><span class="hm-sub ${isC?'t-pos':'t-neg'}">${isC?'+':''}${cell.spread}</span>`;
+    div.addEventListener('mouseenter',()=>{const tip=$('hm-tooltip');tip.style.display='block';tip.innerHTML=`<strong>${FUTURES_TENORS[ri]} — ${CONTRACT_MONTHS[ci]}</strong>Price: <span class="t-val">${cell.price}</span><br>Roll Spread: <span class="${isC?'t-pos':'t-neg'}">${cell.spread}</span><br>Structure: <span class="${isC?'t-pos':'t-neg'}">${isC?'CONTANGO':'BACKWARDATION'}</span>`;});
+    div.addEventListener('mousemove',e=>{const tip=$('hm-tooltip');tip.style.left=e.clientX+12+'px';tip.style.top=e.clientY-60+'px';});
+    div.addEventListener('mouseleave',()=>{$('hm-tooltip').style.display='none';});
+    cells.appendChild(div);
+  }));
+  $('hm-legend').innerHTML=`<div class="legend-item"><div class="legend-dot" style="background:rgba(63,185,80,0.7)"></div>Contango</div><div class="legend-item"><div class="legend-dot" style="background:rgba(248,81,73,0.7)"></div>Backwardation</div><div style="margin-left:auto;font-size:9px;color:var(--text3)">⚠ Illustrative structure — no free real-time futures API</div>`;
+}
+function renderVolSurface(){
+  const expiries=['1M','3M','6M','1Y','2Y','5Y'],tenors2=['1Y','2Y','5Y','10Y','20Y','30Y'];
+  const base=[[42,56,64,72,68,61],[38,51,59,67,63,57],[34,47,55,63,59,53],[28,41,49,57,53,47],[22,34,43,51,47,41],[15,26,36,44,40,35]];
+  $('vs-col-labels').innerHTML='<div style="min-width:70px"></div>'+tenors2.map(t=>`<div class="hm-label">${t}</div>`).join('');
+  $('vs-row-labels').innerHTML=expiries.map(e=>`<div class="hm-row-label" style="height:34px;line-height:32px">${e}</div>`).join('');
+  const grid=$('vol-surface-cells');grid.style.gridTemplateColumns=`repeat(${tenors2.length},1fr)`;grid.style.gap='2px';grid.innerHTML='';
+  const flat=base.flat(),mn=Math.min(...flat),mx=Math.max(...flat);
+  base.forEach(row=>row.forEach(v=>{const t=(v-mn)/(mx-mn);const r=Math.round(88+t*167),g=Math.round(185*(1-t*0.8)),b=Math.round(80*(1-t));const div=document.createElement('div');div.className='hm-cell';div.style.height='32px';div.style.background=`rgba(${r},${g},${b},${0.2+t*0.55})`;div.innerHTML=`<span>${v}</span>`;grid.appendChild(div);}));
+}
+function initOIChart(){
+  const ctx=$('oiChart');if(!ctx||oiChartInst)return;
+  oiChartInst=new Chart(ctx,{type:'bar',data:{labels:['2Y','3Y','5Y','7Y','10Y','20Y','30Y'],datasets:[
+    {label:'Open Interest',data:[124,89,312,187,426,94,231],backgroundColor:'rgba(88,166,255,0.5)',borderColor:'#58a6ff',borderWidth:1},
+    {label:'Volume',data:[88,62,248,134,318,71,167],backgroundColor:'rgba(245,166,35,0.4)',borderColor:'#f5a623',borderWidth:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:10}},tooltip:{backgroundColor:'#1a2333',borderColor:'#243447',borderWidth:1}},scales:{x:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e'}},y:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e'},title:{display:true,text:'000s contracts',color:'#4a5568'}}}}});
+}
+function switchFuturesTab(type,btn){document.querySelectorAll('.tab-bar .tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');renderHeatmap(type);}
+ 
+/* ── SECTION NAV ── */
+function showSection(id, btn) {
+  currentSection = id;
+  document.querySelectorAll('.page-section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  const sec = $('sec-'+id);
+  if(sec) sec.classList.add('active');
+  if(btn) btn.classList.add('active');
+  setTimeout(() => initChartsForSection(id), 60);
+}
+function initChartsForSection(sec){
+  if(sec==='curves'){initYieldCurveChart();initSpreadChart();}
+  else if(sec==='derivatives'){renderHeatmap('ust');renderVolSurface();initOIChart();}
+  else if(sec==='govbonds'){initGovChart();}
+}
+ 
+/* ══════════════════════════════════════
+   INFO TEXTS
+══════════════════════════════════════ */
+const INFO = {
+  agencySec: {title:'Agency Securities',body:'<p>Weekly trading volume for each <b>US Agency bond issuer</b> in $M notional, sourced from FINRA TRACE.</p><p><b>FNMA (Fannie Mae):</b> funds conforming mortgages via MBS guarantee.</p><p><b>FHLB:</b> Federal Home Loan Banks — advances to depository institutions.</p><p><b>FHLMC (Freddie Mac):</b> secondary mortgage market participant.</p><p><b>GNMA (Ginnie Mae):</b> guarantees MBS backed by FHA/VA loans — explicit US government guarantee.</p>'},
+  tradeTypes:{title:'Trade Type Breakdown',body:'<p>FINRA TRACE classifies bond transactions by counterparty, revealing <b>who drives liquidity</b>.</p><p><b>Affiliate:</b> trades between a broker-dealer and its affiliated entities.</p><p><b>Customer:</b> end-investor (fund manager, insurer, pension) trading through a dealer. Buy = client bought; Sell = client sold to dealer.</p><p><b>Inter-dealer:</b> trades between two registered broker-dealers — the wholesale liquidity layer.</p>'},
+  corp144a:  {title:'Corp 144A Securities',body:'<p><b>Rule 144A</b> bonds are private placements sold only to QIBs (≥$100M AUM). Not SEC-registered but freely resold among QIBs.</p><p><b>Investment Grade (IG):</b> rated BBB-/Baa3 or above — lower default risk, tight spreads.</p><p><b>High Yield (HY):</b> rated below BBB- — higher coupon, wider spreads, elevated default risk.</p><p><b>Convertibles:</b> bonds convertible into equity — hybrid risk/reward profile.</p>'},
+  euSec:     {title:'EU Bond Securities',body:'<p><b>EGB (European Government Bonds):</b> sovereign debt from EU member states. The German Bund is the eurozone risk-free benchmark.</p><p><b>Covered Bonds:</b> bank bonds backed by mortgage/public sector pools. Very high credit quality (Pfandbriefe, Obligations Foncières).</p>'},
+  cnSec:     {title:'China Bond Securities',body:'<p><b>CGB:</b> Ministry of Finance sovereign bonds — risk-free CNY benchmark.</p><p><b>Policy Bank Bonds:</b> CDB, EXIM, ADBC — quasi-sovereign, fund national policy.</p><p><b>Local Gov Bonds:</b> provincial/municipal debt, surged post-2015 swap reform.</p>'},
+  jpSec:     {title:'Japan Bond Securities',body:'<p><b>JGB:</b> MoF sovereign debt. BOJ holds ~50% of outstanding — liquidity structurally impaired by YCC policy.</p><p><b>T-Bills:</b> short-term instruments, heavily used in repo markets.</p><p><b>Samurai:</b> JPY bonds issued by foreign entities in Japan.</p>'},
+  yieldCurve:{title:'Yield Curve',body:'<p>Plots government bond yields from 3M to 30Y. Shape reveals market expectations about growth, inflation, and central bank policy.</p><p><b style="color:var(--green)">Normal:</b> long yields > short yields — healthy growth expected.</p><p><b style="color:var(--red)">Inverted:</b> short yields > long yields — recession signal. Has preceded every US recession since 1955.</p>'},
+  spread2y10y:{title:'2Y–10Y Spread',body:'<p>Most-watched inversion indicator on Wall Street. Source: FRED series T10Y2Y.</p><p><b style="color:var(--red)">Negative (inverted):</b> market expects the Fed to cut rates — recession anticipated.</p><p><b style="color:var(--green)">Positive:</b> normal curve. Wide spread = strong growth or inflation expectations.</p>'},
+  futures:   {title:'Futures Curve Structure',body:'<p>Roll spread = far contract price minus near contract price.</p><p><b style="color:var(--green)">Contango:</b> far > near — cost-to-carry for longs. Common in normal markets.</p><p><b style="color:var(--red)">Backwardation:</b> near > far — positive roll yield. Often signals repo stress or supply squeeze.</p>'},
+  volSurface:{title:'Swaption Vol Surface',body:'<p>ATM normal implied vol (bps) for swaptions across expiry (rows) and swap tenor (columns).</p><p>Low vol = low rate uncertainty. High vol = elevated hedging demand. Read to find where rate risk is priced most aggressively.</p>'},
+  oi:        {title:'Open Interest &amp; Volume',body:'<p><b>Open Interest:</b> outstanding contracts not yet settled. Rising OI + rising price = new longs (bullish).</p><p><b>Volume:</b> contracts traded in session. High volume confirms price moves.</p><p><b>OI/Volume Ratio > 1:</b> position buildup — strong directional commitment.</p>'},
+  govMulti:  {title:'Multi-Country Curves',body:'<p>Superimposing sovereign curves allows comparison of monetary policy stance, term premium, and credit quality.</p><p>Spread compression between 10Y yields (e.g., BTP vs Bund) is the key barometer of eurozone stress.</p>'},
+  spreadMatrix:{title:'Sovereign Spread Matrix',body:'<p>Yield premium vs UST 10Y. <b style="color:var(--green)">Negative</b> = country yields less than US (Germany, Japan). <b style="color:var(--red)">Positive</b> = yield premium reflects credit/inflation/currency risk. 1W Δ shows weekly change in bps.</p>'},
+};
+ 
+/* ══════════════════════════════════════
+   INIT
+══════════════════════════════════════ */
+loadData();
+</script>
+</body>
+</html>
+ 
