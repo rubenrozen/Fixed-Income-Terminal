@@ -148,10 +148,8 @@ def fetch_fred():
 
 # ═══════════════════════════════════════════
 # 3. ECB STATISTICAL DATA WAREHOUSE
-#    data-api.ecb.europa.eu — no key
-#
-#  Correct key format:  B.U2.EUR.4F.G_N_A.SV_C_YM.SR_3M
-#  Maturity codes: SR_3M  SR_6M  SR_1Y  SR_2Y  SR_5Y  SR_10Y  SR_30Y
+#    Both old (sdw-wsrest) and new (data-api) endpoints tried
+#    Wildcard CSV bulk download used as final fallback
 # ═══════════════════════════════════════════
 ECB_MATURITIES = {
     "SR_3M":  "3M",
@@ -162,21 +160,55 @@ ECB_MATURITIES = {
     "SR_10Y": "10Y",
     "SR_30Y": "30Y",
 }
-ECB_HEADERS = {
-    "User-Agent": UA,
-    "Accept":     "application/json",
-}
-# sdw-wsrest.ecb.europa.eu = older ECB SDMX API — more stable than data-api.ecb.europa.eu
-ECB_BASE = "https://sdw-wsrest.ecb.europa.eu/service/data"
+ECB_HEADERS = {"User-Agent": UA, "Accept": "application/json"}
 
 def fetch_ecb_yield(mat_code):
     key = f"B.U2.EUR.4F.G_N_A.SV_C_YM.{mat_code}"
-    url = f"{ECB_BASE}/YC/{key}?lastNObservations=5&format=jsondata"
-    data = fetch_json(url, headers=ECB_HEADERS)
-    series = data["dataSets"][0]["series"]
-    obs    = list(series.values())[0]["observations"]
-    last   = obs[str(max(int(k) for k in obs))]
-    return round(last[0], 4)
+    # Try 3 URL variants — the 400 in earlier run was likely from lastNObservations on a bad day
+    urls = [
+        f"https://data-api.ecb.europa.eu/service/data/YC/{key}?format=jsondata",
+        f"https://data-api.ecb.europa.eu/service/data/YC/{key}?format=jsondata&lastNObservations=5",
+        f"https://sdw-wsrest.ecb.europa.eu/service/data/YC/{key}?format=jsondata&lastNObservations=5",
+    ]
+    last_err = None
+    for url in urls:
+        try:
+            data = fetch_json(url, headers=ECB_HEADERS)
+            series = data["dataSets"][0]["series"]
+            obs    = list(series.values())[0]["observations"]
+            last   = obs[str(max(int(k) for k in obs))]
+            return round(last[0], 4)
+        except Exception as e:
+            last_err = e
+    raise RuntimeError(f"ECB {mat_code}: all attempts failed — {last_err}")
+
+def _ecb_bulk_csv():
+    """Fallback: pull all YC maturities in one CSV request (wildcard on 7th dim)."""
+    for base in ["https://data-api.ecb.europa.eu", "https://sdw-wsrest.ecb.europa.eu"]:
+        try:
+            url  = f"{base}/service/data/YC/B.U2.EUR.4F.G_N_A.SV_C_YM.?format=csvdata&lastNObservations=1"
+            text = fetch_text(url, headers={"User-Agent": UA, "Accept": "text/csv,*/*"})
+            tenors, yields = [], []
+            for line in text.splitlines()[1:]:           # skip header
+                parts = line.split(",")
+                if len(parts) < 2:
+                    continue
+                series_key = parts[0].strip('"')
+                mat = series_key.split(".")[-1]           # e.g. SR_10Y
+                val_str = parts[-1].strip('"')
+                label = ECB_MATURITIES.get(mat)
+                if label:
+                    try:
+                        yields.append(round(float(val_str), 4))
+                        tenors.append(label)
+                    except ValueError:
+                        pass
+            if tenors:
+                print(f"    ECB bulk CSV ({base.split('.')[0].split('//')[1]}): {len(tenors)} maturities")
+                return tenors, yields
+        except Exception as e:
+            print(f"    ECB bulk CSV {base}: {e}")
+    return [], []
 
 def fetch_ecb():
     tenors, yields = [], []
@@ -188,38 +220,59 @@ def fetch_ecb():
             print(f"    ECB {label}: {y}%")
         except Exception as e:
             print(f"    ECB {label} skipped: {e}")
+
+    # If per-maturity calls all failed, try bulk CSV
+    if not tenors:
+        tenors, yields = _ecb_bulk_csv()
+
     # EURIBOR 3M
     euribor = None
-    try:
-        url = f"{ECB_BASE}/FM/B.U2.EUR.RT.MM.EURIBOR3MD_.HSTA?lastNObservations=1&format=jsondata"
-        d   = fetch_json(url, headers=ECB_HEADERS)
-        obs = list(d["dataSets"][0]["series"].values())[0]["observations"]
-        euribor = round(list(obs.values())[-1][0], 4)
-        print(f"    EURIBOR 3M: {euribor}%")
-    except Exception as e:
-        print(f"    EURIBOR skipped: {e}")
+    for base in ["https://data-api.ecb.europa.eu", "https://sdw-wsrest.ecb.europa.eu"]:
+        try:
+            url = f"{base}/service/data/FM/B.U2.EUR.RT.MM.EURIBOR3MD_.HSTA?format=jsondata&lastNObservations=1"
+            d   = fetch_json(url, headers=ECB_HEADERS)
+            obs = list(d["dataSets"][0]["series"].values())[0]["observations"]
+            euribor = round(list(obs.values())[-1][0], 4)
+            print(f"    EURIBOR 3M: {euribor}%")
+            break
+        except Exception as e:
+            print(f"    EURIBOR ({base.split('.')[1]}): {e}")
+
     if not tenors:
-        raise RuntimeError("All ECB maturities failed — sdw-wsrest unreachable?")
+        raise RuntimeError("ECB: all endpoints and bulk CSV failed")
     return {"tenors": tenors, "yields": yields, "euribor_3m": euribor}
 
 
 # ═══════════════════════════════════════════
-# 4. BANK OF JAPAN — JGB Yields
-#    Japan Ministry of Finance CSV — no key
-#  Stable URL: mof.go.jp publishes daily JGB closing yields
-#  Columns: Date, 1Y, 2Y, 5Y, 10Y, 20Y, 30Y, 40Y
+# 4. JAPAN — JGB Yields via Ministry of Finance CSV
+#    mof.go.jp — no key needed
+#    Falls back to BOJ statistics page if MoF moves the file
 # ═══════════════════════════════════════════
-def fetch_boj():
-    # MoF publishes the complete history as a single CSV
-    url = "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/data/jgbcme_all.csv"
-    csv_text = fetch_text(url, headers={
-        "User-Agent": UA,
-        "Accept":     "text/csv,*/*",
-        "Referer":    "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/index.htm",
-    })
-    lines = [l.strip() for l in csv_text.splitlines() if l.strip()]
+_MOF_CSV_CANDIDATES = [
+    # MoF English page — discovered via the index page
+    "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/data/jgbcme_all.csv",
+    "https://www.mof.go.jp/english/jgbs/reference/interest_rate/data/jgbcme_all.csv",
+    # BOJ long-term yield CSV (JSDA data re-published)
+    "https://www.boj.or.jp/statistics/market/bond/bondyield/long/lgbond.csv",
+    "https://www.boj.or.jp/statistics/market/bond/bondyield/util/lgbond.csv",
+]
+_TENOR_ALIASES = {
+    "1year":"1Y","1-year":"1Y","1yr":"1Y","1y":"1Y",
+    "2year":"2Y","2-year":"2Y","2yr":"2Y","2y":"2Y",
+    "3year":"3Y","3-year":"3Y","3yr":"3Y","3y":"3Y",
+    "5year":"5Y","5-year":"5Y","5yr":"5Y","5y":"5Y",
+    "7year":"7Y","7-year":"7Y","7yr":"7Y","7y":"7Y",
+    "10year":"10Y","10-year":"10Y","10yr":"10Y","10y":"10Y",
+    "15year":"15Y","15-year":"15Y","15yr":"15Y","15y":"15Y",
+    "20year":"20Y","20-year":"20Y","20yr":"20Y","20y":"20Y",
+    "25year":"25Y","25-year":"25Y","25yr":"25Y","25y":"25Y",
+    "30year":"30Y","30-year":"30Y","30yr":"30Y","30y":"30Y",
+    "40year":"40Y","40-year":"40Y","40yr":"40Y","40y":"40Y",
+}
 
-    # Find the header row (contains "Date" or "date" or year labels)
+def _parse_jgb_csv(csv_text):
+    lines = [l.strip() for l in csv_text.splitlines() if l.strip()]
+    # Find header row
     header_idx = None
     for i, line in enumerate(lines):
         lower = line.lower()
@@ -227,47 +280,61 @@ def fetch_boj():
             header_idx = i
             break
     if header_idx is None:
-        raise RuntimeError("MoF CSV: header row not found")
-
-    headers = [h.strip().strip('"').lower() for h in lines[header_idx].split(",")]
-
-    # Find last data row (starts with a date-like value)
+        raise RuntimeError("Header row not found")
+    headers = [h.strip().strip('"').lower().replace(" ","").replace("-","") for h in lines[header_idx].split(",")]
     data_rows = [
         [c.strip().strip('"') for c in l.split(",")]
         for l in lines[header_idx + 1:]
         if l and re.match(r'\d{4}', l.strip())
     ]
     if not data_rows:
-        raise RuntimeError("MoF CSV: no data rows found")
+        raise RuntimeError("No data rows found")
     last = data_rows[-1]
-
-    # Map column name → standard tenor
-    tenor_aliases = {
-        "1y": "1Y", "1-year": "1Y", "1yr": "1Y",
-        "2y": "2Y", "2-year": "2Y", "2yr": "2Y",
-        "5y": "5Y", "5-year": "5Y", "5yr": "5Y",
-        "10y": "10Y","10-year":"10Y","10yr":"10Y",
-        "20y": "20Y","20-year":"20Y","20yr":"20Y",
-        "30y": "30Y","30-year":"30Y","30yr":"30Y",
-        "40y": "40Y","40-year":"40Y","40yr":"40Y",
-    }
     tenors, yields = [], []
     for i, h in enumerate(headers[1:], start=1):
-        norm = h.replace(" ", "").replace("_", "").replace("-year", "y")
-        label = tenor_aliases.get(norm)
+        norm = h.replace("-year","y").replace("year","y")
+        label = _TENOR_ALIASES.get(norm) or _TENOR_ALIASES.get(h)
         if label and i < len(last):
             try:
                 val = float(last[i])
-                if 0 < val < 30:   # sanity check
+                if 0 < val < 30:
                     tenors.append(label)
                     yields.append(round(val, 4))
             except ValueError:
                 pass
-
     if not tenors:
-        raise RuntimeError(f"MoF CSV: no tenors parsed. Headers: {headers[:8]}")
+        raise RuntimeError(f"No tenors parsed — headers: {headers[:8]}")
+    return tenors, yields, last[0]
 
-    return {"tenors": tenors, "yields": yields, "date": last[0]}
+def fetch_boj():
+    # Step 1: Try to discover the CSV link from the MoF index page (most reliable)
+    discovered_urls = list(_MOF_CSV_CANDIDATES)
+    try:
+        index_url = "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/index.htm"
+        html = fetch_text(index_url, headers={"User-Agent": UA, "Accept-Language": "en"})
+        for href in re.findall(r'href="([^"]*\.csv[^"]*)"', html, re.IGNORECASE):
+            full = href if href.startswith("http") else "https://www.mof.go.jp" + href
+            if full not in discovered_urls:
+                discovered_urls.insert(0, full)
+                print(f"    MoF index: discovered CSV → {full.split('/')[-1]}")
+    except Exception as e:
+        print(f"    MoF index page: {e}")
+
+    # Step 2: Try each candidate URL
+    for url in discovered_urls:
+        try:
+            csv_text = fetch_text(url, headers={
+                "User-Agent": UA,
+                "Accept":     "text/csv,*/*",
+                "Referer":    "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/index.htm",
+            })
+            tenors, yields, date = _parse_jgb_csv(csv_text)
+            print(f"    JGB via {url.split('/')[2]}: {len(tenors)} tenors, date={date}")
+            return {"tenors": tenors, "yields": yields, "date": date}
+        except Exception as e:
+            print(f"    {url.split('/')[-1]}: {e}")
+
+    raise RuntimeError("JGB: all MoF/BOJ CSV URLs failed — check mof.go.jp for current file path")
 
 
 # ═══════════════════════════════════════════
@@ -410,7 +477,10 @@ def fetch_china_bonds():
     try:
         url  = "https://stats.oecd.org/SDMX-JSON/data/MEI_FIN/IRLTLT01.CNP.M/all?lastNObservations=3&format=jsondata"
         data = fetch_json(url, headers={"Accept": "application/json", "User-Agent": UA})
-        series = data["dataSets"][0]["series"]
+        ds   = data.get("dataSets") or data.get("DataSets")
+        if not ds:
+            raise RuntimeError(f"No 'dataSets' key — keys found: {list(data.keys())}")
+        series = ds[0]["series"]
         obs    = list(series.values())[0]["observations"]
         last   = obs[str(max(int(k) for k in obs))]
         result["cgb_10y"] = round(last[0], 4)
@@ -418,21 +488,25 @@ def fetch_china_bonds():
     except Exception as e:
         print(f"    OECD CGB 10Y: {e}")
 
-    # ── FRED: China 10Y yield (if FRED key available) ───────────
+    # ── FRED: China 10Y yield fallback (if OECD failed) ────────
     if FRED_KEY and "cgb_10y" not in result:
-        try:
-            url  = (f"https://api.stlouisfed.org/fred/series/observations"
-                    f"?series_id=IRLTLT01CNM156N&api_key={FRED_KEY}&file_type=json"
-                    f"&sort_order=desc&limit=3")
-            data = fetch_json(url)
-            for obs in data.get("observations", []):
-                if obs.get("value") and obs["value"] != ".":
-                    result["cgb_10y"]      = float(obs["value"])
-                    result["cgb_10y_date"] = obs["date"]
-                    print(f"    FRED CGB 10Y: {result['cgb_10y']}%")
+        # Correct FRED series: INTGSTCNM193N = China 10Y gov bond (IMF IFS)
+        for sid in ["INTGSTCNM193N", "IRLTLT01CNM156N"]:
+            try:
+                url  = (f"https://api.stlouisfed.org/fred/series/observations"
+                        f"?series_id={sid}&api_key={FRED_KEY}&file_type=json"
+                        f"&sort_order=desc&limit=5")
+                data = fetch_json(url)
+                for obs in data.get("observations", []):
+                    if obs.get("value") and obs["value"] != ".":
+                        result["cgb_10y"]      = float(obs["value"])
+                        result["cgb_10y_date"] = obs["date"]
+                        print(f"    FRED {sid}: {result['cgb_10y']}%")
+                        break
+                if "cgb_10y" in result:
                     break
-        except Exception as e:
-            print(f"    FRED CGB 10Y: {e}")
+            except Exception as e:
+                print(f"    FRED {sid}: {e}")
 
     # ── CHINAMONEY.COM.CN: CFETS published CGB yield curve ──────
     # This is the official China interbank market (CFETS) page
@@ -471,70 +545,115 @@ def fetch_china_bonds():
 
 # ═══════════════════════════════════════════
 # 7. UK DMO — Gilt Yields
-#    www.dmo.gov.uk XML — no key
+#    CSV endpoint tried first (simpler), XML as fallback
+#    Reports: D3 = benchmark by maturity; D4A = ISDA closing yields
 # ═══════════════════════════════════════════
 def fetch_uk_gilts():
-    # UK DMO daily gilt closing yields
-    url = "https://www.dmo.gov.uk/data/XmlDataReport?reportCode=D4A"
+    # ── Attempt 1: CSV format (D3 = UK benchmark gilt yields by maturity) ──
+    try:
+        url  = "https://www.dmo.gov.uk/data/CsvDataReport?reportCode=D3"
+        text = fetch_text(url)
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        # Find header
+        header_idx = next((i for i, l in enumerate(lines) if "," in l and any(x in l.lower() for x in ["maturity","tenor","years","yield","term"])), None)
+        if header_idx is not None:
+            headers = [h.strip().strip('"').lower() for h in lines[header_idx].split(",")]
+            tenors, yields = [], []
+            for line in lines[header_idx + 1:]:
+                parts = [p.strip().strip('"') for p in line.split(",")]
+                if len(parts) < 2:
+                    continue
+                # First col = maturity label, last numeric col = yield
+                label = parts[0]
+                for p in reversed(parts[1:]):
+                    try:
+                        y = float(p)
+                        if 0 < y < 20:
+                            tenors.append(label)
+                            yields.append(round(y, 4))
+                            break
+                    except ValueError:
+                        pass
+            if tenors:
+                print(f"    UK DMO CSV D3: {len(tenors)} tenors")
+                return {"tenors": tenors, "yields": yields, "date": ""}
+        print("    UK DMO CSV D3: no tenors parsed, trying D4A CSV…")
+    except Exception as e:
+        print(f"    UK DMO CSV D3: {e}")
+
+    # ── Attempt 2: CSV format D4A (ISDA gilt yields) ──
+    try:
+        url  = "https://www.dmo.gov.uk/data/CsvDataReport?reportCode=D4A"
+        text = fetch_text(url)
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        tenors, yields, date_str = [], [], ""
+        t_re = re.compile(r'(\d+)\s*[Yy](?:ear)?')
+        for line in lines[1:]:          # skip header
+            parts = [p.strip().strip('"') for p in line.split(",")]
+            if not parts or not parts[0]:
+                continue
+            m = t_re.search(parts[0])
+            for p in reversed(parts[1:]):
+                try:
+                    y = float(p)
+                    if 0 < y < 20 and m:
+                        tenors.append(m.group(1) + "Y")
+                        yields.append(round(y, 4))
+                        break
+                except ValueError:
+                    pass
+        if tenors:
+            print(f"    UK DMO CSV D4A: {len(tenors)} tenors")
+            return {"tenors": tenors, "yields": yields, "date": date_str}
+        print("    UK DMO CSV D4A: no tenors parsed, trying XML…")
+    except Exception as e:
+        print(f"    UK DMO CSV D4A: {e}")
+
+    # ── Attempt 3: XML fallback with debug output ──
+    url  = "https://www.dmo.gov.uk/data/XmlDataReport?reportCode=D4A"
     text = fetch_text(url)
     root = ET.fromstring(text)
 
-    # Find all data rows
+    # Print first 300 chars of XML for debugging in GitHub Actions log
+    print(f"    UK DMO XML preview: {text[:300].replace(chr(10),' ')}")
+
     rows = (root.findall(".//ISDAGILTYIELD")
             or root.findall(".//{*}ISDAGILTYIELD")
-            or root.findall(".//row")
-            or root.findall(".//{*}row"))
+            or [el for el in root.iter() if len(list(el)) > 2])
 
     if not rows:
-        # Try iterating all children of last entry
-        all_items = list(root.iter())
-        rows = [el for el in all_items if len(list(el)) > 3]
-
-    if not rows:
-        raise RuntimeError("UK DMO: no data rows found")
+        raise RuntimeError("UK DMO XML: no data rows — check XML preview above in logs")
 
     last = rows[-1]
     tenors, yields, date_str = [], [], ""
-
     for child in last:
-        tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
-        tag_up = tag.upper()
-        if not child.text or not child.text.strip():
+        tag = (child.tag.split("}")[-1] if "}" in child.tag else child.tag).upper()
+        txt = (child.text or "").strip()
+        if not txt:
             continue
-        if "DATE" in tag_up or "ISIN" in tag_up:
-            if "DATE" in tag_up:
-                date_str = child.text.strip()
+        if "DATE" in tag:
+            date_str = txt
+            continue
+        if any(x in tag for x in ["ISIN","NAME","TYPE","STATUS","CURRENCY"]):
             continue
         try:
-            val = float(child.text.strip())
-            # Map tag to tenor
-            for code, label in [("2Y","2Y"),("5Y","5Y"),("10Y","10Y"),("15Y","15Y"),("20Y","20Y"),("25Y","25Y"),("30Y","30Y"),("40Y","40Y"),("50Y","50Y"),
-                                 ("2","2Y"),("5","5Y"),("10","10Y"),("20","20Y"),("30","30Y")]:
-                if tag_up.endswith(code.replace("Y","")) or code.replace("Y","") in tag_up:
+            val = float(txt)
+            if not (0 < val < 20):
+                continue
+            # Try to extract tenor from tag name
+            m = re.search(r'(\d+)', tag)
+            if m:
+                yr = int(m.group(1))
+                if 1 <= yr <= 60:
+                    label = f"{yr}Y"
                     if label not in tenors:
                         tenors.append(label)
                         yields.append(round(val, 4))
-                    break
         except ValueError:
             pass
 
-    # If tag matching failed, just take numeric columns in order
     if not tenors:
-        standard = ["2Y","5Y","10Y","15Y","20Y","30Y"]
-        numeric_vals = []
-        for child in last:
-            try:
-                v = float(child.text.strip())
-                if 0 < v < 20:
-                    numeric_vals.append(round(v, 4))
-            except (ValueError, AttributeError):
-                pass
-        tenors = standard[:len(numeric_vals)]
-        yields = numeric_vals[:len(standard)]
-
-    if not tenors:
-        raise RuntimeError("UK DMO: could not parse any yield values")
-
+        raise RuntimeError("UK DMO: all 3 methods failed — see XML preview in GitHub Actions log")
     return {"tenors": tenors, "yields": yields, "date": date_str}
 
 
