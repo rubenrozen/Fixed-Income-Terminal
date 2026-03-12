@@ -293,17 +293,10 @@ function buildHTML() {
         <div class="grid-4">${buildUSKPIs()}</div>
       </div>
       <div class="section">
-        <div class="section-label">Agency Bond Market</div>
+        <div class="section-label">US Credit Market — TRACE Spreads</div>
         <div class="grid-2">
-          ${buildPanel('Securities Overview','Daily Volume · $M notional','pop-left',INFO.agencySec,buildFinraAgencyTable())}
-          ${buildPanel('Trade Type Breakdown','Buy / Sell / Inter-dealer','pop-right',INFO.tradeTypes,buildFinraTradeTable())}
-        </div>
-      </div>
-      <div class="section">
-        <div class="section-label">Corporate 144A Bond Market</div>
-        <div class="grid-2">
-          ${buildPanel('Securities Overview','Daily Volume · $M notional','pop-left',INFO.corp144a,buildCorpTable())}
-          ${buildPanel('Trade Type Breakdown','Buy / Sell / Inter-dealer','pop-right',INFO.tradeTypes,buildCorpTradeTable())}
+          ${buildPanel('IG & HY Spreads','Option-adjusted spreads vs Treasuries','pop-left',INFO.agencySec,buildFREDCreditTable())}
+          ${buildPanel('Spread History','24-month IG/HY OAS evolution','pop-right',INFO.tradeTypes,buildFREDCreditNote())}
         </div>
       </div>
     </div>
@@ -317,7 +310,7 @@ function buildHTML() {
         <div class="section-label">EU Government &amp; Corporate Bonds</div>
         <div class="grid-2">
           ${buildPanel('EU Yield Curve','ECB Statistical Data Warehouse','pop-left',INFO.euSec,buildECBTable())}
-          ${buildPanel('EURIBOR &amp; Key Rates','Short-term EU rates','pop-right',INFO.tradeTypes,'<div class="no-data"><span class="no-data-icon">📊</span>ECB rates table — see Yield Curves section</div>')}
+          ${buildPanel('EURIBOR &amp; Key Rates','Short-term EU rates','pop-right',INFO.tradeTypes,buildEURIBORPanel())}
         </div>
       </div>
     </div>
@@ -345,7 +338,7 @@ function buildHTML() {
         <div class="section-label">JGB &amp; Corporate Bond Market</div>
         <div class="grid-2">
           ${buildPanel('JGB Yield Curve','Bank of Japan official data','pop-left',INFO.jpSec,buildBOJTable())}
-          ${buildPanel('Trade Type Breakdown','BOJ published statistics','pop-right',INFO.tradeTypes,'<div class="no-data"><span class="no-data-icon">📊</span>Granular BOJ trade data not available via free API — see Gov Bonds section</div>')}
+          ${buildPanel('JGB Key Tenors','Selected maturities & spreads','pop-right',INFO.tradeTypes,buildBOJKeyTenors())}
         </div>
       </div>
     </div>
@@ -612,15 +605,101 @@ function buildECBTable() {
 }
  
 /* ══════════════════════════════════════
+   US CREDIT (FRED) — replaces FINRA panels
+══════════════════════════════════════ */
+function buildFREDCreditTable() {
+  const f = DATA?.fred || {};
+  if (!f.ig_spread_bps && !f.hy_spread_bps) return noData('FRED spread data not loaded');
+  const rows = [
+    {label:'Investment Grade OAS', val: f.ig_spread_bps!=null?fmtBps(f.ig_spread_bps):'—', src:'ICE BofA IG Index'},
+    {label:'High Yield OAS',        val: f.hy_spread_bps!=null?fmtBps(f.hy_spread_bps):'—', src:'ICE BofA HY Index'},
+    {label:'2Y–10Y Spread',         val: f.t10y2y!=null?fmt(f.t10y2y,2)+'%':'—',             src:'FRED T10Y2Y'},
+    {label:'SOFR',                  val: f.sofr!=null?fmt(f.sofr,2)+'%':'—',                 src:'FRED SOFR'},
+  ];
+  return `<table class="bond-table"><thead><tr>
+    <th>Indicator</th><th>Value</th><th>Source</th>
+  </tr></thead><tbody>
+  ${rows.map(r=>`<tr>
+    <td class="t-name">${r.label}</td>
+    <td class="t-val">${r.val}</td>
+    <td style="font-size:9px;color:var(--text3)">${r.src}</td>
+  </tr>`).join('')}
+  </tbody></table>`;
+}
+ 
+function buildFREDCreditNote() {
+  const f = DATA?.fred || {};
+  const hist = f.spread_history || [];
+  if (!hist.length) return noData('Spread history not loaded');
+  const last = hist[hist.length-1];
+  const first = hist[0];
+  return `<div style="padding:14px;font-size:10px;line-height:1.9;color:var(--text2)">
+    <b style="color:var(--heading);display:block;margin-bottom:8px">24-Month Spread Summary</b>
+    <div>📈 <b style="color:var(--amber)">Latest IG OAS:</b> ${f.ig_spread_bps!=null?fmtBps(f.ig_spread_bps):'—'}</div>
+    <div>📈 <b style="color:var(--amber)">Latest HY OAS:</b> ${f.hy_spread_bps!=null?fmtBps(f.hy_spread_bps):'—'}</div>
+    <div style="margin-top:8px;font-size:9px;color:var(--text3)">${hist.length} monthly observations · ${first.date||''} → ${last.date||''}</div>
+    <div style="margin-top:8px;padding:8px;background:rgba(88,166,255,0.06);border-radius:4px;font-size:9px;color:var(--text3)">
+    Full history visible in the Yield Curves section → Spread Evolution chart.</div>
+  </div>`;
+}
+ 
+function buildEURIBORPanel() {
+  const ecb = DATA?.ecb || {};
+  if (!ecb.tenors || !ecb.tenors.length) return noData('ECB data not loaded');
+  const pts = [
+    {label:'ECB 3M',  tenor:'3M'},
+    {label:'ECB 1Y',  tenor:'1Y'},
+    {label:'ECB 2Y',  tenor:'2Y'},
+    {label:'ECB 5Y',  tenor:'5Y'},
+    {label:'ECB 10Y', tenor:'10Y'},
+    {label:'ECB 30Y', tenor:'30Y'},
+  ];
+  return `<table class="bond-table"><thead><tr>
+    <th>Tenor</th><th>Yield (%)</th><th>Source</th>
+  </tr></thead><tbody>
+  ${pts.map(p => {
+    const i = ecb.tenors.indexOf(p.tenor);
+    const v = i>=0 && ecb.yields[i]!=null ? fmt(ecb.yields[i],3)+'%' : '—';
+    return `<tr><td class="t-name">${p.label}</td><td class="t-val">${v}</td><td style="font-size:9px;color:var(--text3)">ECB SDW</td></tr>`;
+  }).join('')}
+  <tr style="border-top:1px solid var(--border)">
+    <td class="t-name" style="color:var(--text3)">EURIBOR 3M</td>
+    <td class="t-val">${ecb.euribor_3m!=null?fmt(ecb.euribor_3m,2)+'%':'—'}</td>
+    <td style="font-size:9px;color:var(--text3)">ECB SDW</td>
+  </tr>
+  </tbody></table>`;
+}
+ 
+function buildBOJKeyTenors() {
+  const boj = DATA?.boj;
+  if (!boj || !boj.tenors || !boj.tenors.length) return noData('BOJ data not loaded');
+  const key = ['2Y','5Y','10Y','20Y','30Y'];
+  const map  = Object.fromEntries(boj.tenors.map((t,i)=>[t, boj.yields[i]]));
+  const rows = key.map(t => ({tenor:t, val:map[t]!=null?fmt(map[t],3)+'%':'—'}));
+  // 2s10s and 10s30s spreads
+  const s2_10 = map['10Y']!=null&&map['2Y']!=null ? fmt(map['10Y']-map['2Y'],3)+'%' : '—';
+  const s10_30= map['30Y']!=null&&map['10Y']!=null? fmt(map['30Y']-map['10Y'],3)+'%': '—';
+  return `<table class="bond-table"><thead><tr>
+    <th>Tenor</th><th>Yield (%)</th>
+  </tr></thead><tbody>
+  ${rows.map(r=>`<tr><td class="t-name">${r.tenor}</td><td class="t-val">${r.val}</td></tr>`).join('')}
+  <tr class="row-group"><td colspan="2">Key Spreads</td></tr>
+  <tr><td class="t-name">2s10s</td><td class="t-val">${s2_10}</td></tr>
+  <tr><td class="t-name">10s30s</td><td class="t-val">${s10_30}</td></tr>
+  </tbody></table>`;
+}
+ 
+/* ══════════════════════════════════════
    CN SECTION
 ══════════════════════════════════════ */
 function buildCNKPIs() {
   const cn = DATA?.china || {};
-  const wb = cn.wb_market_cap_gdp;
+  const mc = cn.market_cap_pct_gdp;
+  const cgb10y = cn.cgb_10y;
   const cards = [
-    {label:'CGB 10Y Yield',    val:'—', chg:'ADB / CCDC', src:'ADB Asian Bonds Online', pos:true},
-    {label:'Market Cap/GDP',   val: wb ? fmt(wb.value,1)+'%' : '—', chg: wb ? wb.date : '', src:'World Bank', pos:true},
-    {label:'Policy Bank Bonds',val:'—', chg:'Outstanding volume', src:'CCDC chinabond.com.cn', pos:true},
+    {label:'CGB 10Y Yield',    val: cgb10y!=null ? fmt(cgb10y,2)+'%' : '—', chg: cn.cgb_10y_date||'OECD / FRED', src:'OECD MEI_FIN', pos:true},
+    {label:'Market Cap/GDP',   val: mc ? fmt(mc.value,1)+'%' : '—',          chg: mc ? mc.date : '', src:'World Bank', pos:true},
+    {label:'Policy Bank Bonds',val:'—',                                        chg:'Outstanding volume', src:'CCDC chinabond.com.cn', pos:true},
     {label:'Data Frequency',   val:'WEEKLY', chg:'Updated every Monday', src:'GitHub Actions', pos:true},
   ];
   return cards.map(c=>`<div class="stat-card">
@@ -634,19 +713,30 @@ function buildCNKPIs() {
 function buildChinaTable() {
   const cn = DATA?.china;
   if (!cn) return noData('China data not loaded');
-  const hasADB = cn.adb_yield || cn.adb_size;
-  const hasCCDC = cn.ccdc_raw_numbers && cn.ccdc_raw_numbers.length;
-  if (!hasADB && !hasCCDC) return noData('ADB / CCDC data unavailable — check network access from GitHub Actions');
+  const mc  = cn.market_cap_pct_gdp;
+  const gdp = cn.gdp_usd;
+  const cgb = cn.cgb_10y;
   let html = '<div style="padding:12px 14px">';
-  if (cn.wb_market_cap_gdp) {
-    const wb = cn.wb_market_cap_gdp;
-    html += `<div style="margin-bottom:8px;font-size:11px"><span class="t-name">Market Cap / GDP</span>
-      <span class="t-val" style="float:right">${wb.value?fmt(wb.value,1)+'%':'—'}</span>
-      <div style="font-size:9px;color:var(--text3)">World Bank · ${wb.date||''}</div></div>`;
+  if (cgb != null) {
+    html += `<div style="margin-bottom:10px">
+      <span class="t-name">CGB 10Y Yield</span>
+      <span class="t-val" style="float:right;color:var(--green)">${fmt(cgb,2)}%</span>
+      <div style="font-size:9px;color:var(--text3)">OECD MEI_FIN · ${cn.cgb_10y_date||''}</div></div>`;
   }
-  if (cn.ccdc_raw_numbers) {
-    html += `<div style="margin-top:8px;font-size:9px;color:var(--text3)">CCDC raw indicators (${cn.ccdc_raw_numbers.length} fields parsed)</div>`;
+  if (mc) {
+    html += `<div style="margin-bottom:10px">
+      <span class="t-name">Market Cap / GDP</span>
+      <span class="t-val" style="float:right">${fmt(mc.value,1)}%</span>
+      <div style="font-size:9px;color:var(--text3)">World Bank · ${mc.date||''}</div></div>`;
   }
+  if (gdp) {
+    const gdpT = (gdp.value / 1e12).toFixed(2);
+    html += `<div style="margin-bottom:10px">
+      <span class="t-name">GDP (nominal)</span>
+      <span class="t-val" style="float:right">$${gdpT}T</span>
+      <div style="font-size:9px;color:var(--text3)">World Bank · ${gdp.date||''}</div></div>`;
+  }
+  if (!cgb && !mc && !gdp) return noData('No China data available — check GitHub Actions log');
   html += '</div>';
   return html;
 }
@@ -967,4 +1057,3 @@ loadData();
 </script>
 </body>
 </html>
- 
