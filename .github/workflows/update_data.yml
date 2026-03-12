@@ -28,7 +28,7 @@ jobs:
       - name: Fetch all bond market data
         env:
           FRED_API_KEY:        ${{ secrets.FRED_API_KEY }}
-          FINRA_CLIENT_ID:     ${{ secrets.FINRA_CLIENT_ID }}
+          FINRA_API_KEY:       ${{ secrets.FINRA_API_KEY }}
           FINRA_CLIENT_SECRET: ${{ secrets.FINRA_CLIENT_SECRET }}
         run: python fetch_data.py
 
