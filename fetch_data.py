@@ -361,42 +361,37 @@ def get_finra_token():
         f"{FINRA_CLIENT_ID}:{FINRA_CLIENT_SECRET}".encode()
     ).decode()
 
-    # FINRA has changed their token endpoint URL over time — try both
-    token_urls = [
-        "https://ews.fip.finra.org/finra-api/oauth/client_credential/accesstoken",
-        "https://api.finra.org/oauth2/client_credentials/accesstoken",
-    ]
+    # Official FINRA token endpoint (from developer.finra.org/docs#authorization)
+    # grant_type is in query string only — do NOT put it in body too
+    token_url = "https://ews.fip.finra.org/fip/rest/ews/oauth2/access_token?grant_type=client_credentials"
     last_err = None
-    for token_url in token_urls:
-        try:
-            resp = fetch_json(
-                token_url + "?grant_type=client_credentials",
-                headers={
-                    "Authorization":  f"Basic {creds}",
-                    "Content-Type":   "application/x-www-form-urlencoded",
-                    "Accept":         "application/json",
-                },
-                data=b"grant_type=client_credentials",
-            )
-            token = resp.get("access_token") or resp.get("token")
-            if token:
-                print(f"    FINRA token obtained via {token_url.split('/')[2]}")
-                _finra_token = token
-                return _finra_token
-            last_err = f"No token in response keys: {list(resp.keys())}"
-        except Exception as e:
-            last_err = str(e)
-            continue
+    try:
+        resp = fetch_json(
+            token_url,
+            headers={
+                "Authorization": f"Basic {creds}",
+                "Content-Type":  "application/x-www-form-urlencoded",
+                "Accept":        "application/json",
+            },
+        )
+        token = resp.get("access_token") or resp.get("token")
+        if token:
+            print(f"    FINRA token ✅ obtained")
+            _finra_token = token
+            return _finra_token
+        last_err = f"No token in response — keys: {list(resp.keys())}"
+    except Exception as e:
+        last_err = str(e)
 
     raise RuntimeError(
-        f"FINRA token failed on all endpoints. Last error: {last_err}\n"
-        "    → Check FINRA_CLIENT_ID and FINRA_CLIENT_SECRET at developer.finra.org"
+        f"FINRA token failed. Last error: {last_err}\n"
+        "    → Check FINRA_API_KEY and FINRA_CLIENT_SECRET at developer.finra.org"
     )
 
-def finra_get(endpoint):
+def finra_get(group, endpoint):
     token = get_finra_token()
     return fetch_json(
-        f"https://api.finra.org/data/group/otcMarket/name/{endpoint}",
+        f"https://api.finra.org/data/group/{group}/name/{endpoint}",
         headers={
             "Authorization": f"Bearer {token}",
             "Accept":        "application/json",
@@ -410,39 +405,55 @@ def parse_volume(v):
         return None
 
 def fetch_finra():
-    rows = finra_get("weeklySummary")
+    # fixedIncomeMarket group — accessible with Public plan
+    # corporateAndAgencyCappedVolume: weekly corp + agency TRACE volumes
     result = {"date": None, "agency": {}, "corp_ig": {}, "corp_hy": {}, "agency_issuers": {}}
 
-    for row in (rows if isinstance(rows, list) else []):
-        if not result["date"]:
-            result["date"] = row.get("reportDate") or row.get("weekEndingDate")
-        market  = str(row.get("market", "")).lower()
-        rtype   = str(row.get("reportType", row.get("productType", ""))).lower()
-        entry = {
-            "buy_volume_mm":      parse_volume(row.get("buyVolume")  or row.get("customerBuyVolume")),
-            "sell_volume_mm":     parse_volume(row.get("sellVolume") or row.get("customerSellVolume")),
-            "interdealer_vol_mm": parse_volume(row.get("interDealerVolume") or row.get("interDealerVol")),
-            "trade_count":        row.get("tradeCount") or row.get("numberOfTrades"),
-        }
-        if "agency" in market:
-            result["agency"] = entry
-        elif "investment grade" in rtype or "ig" == rtype or "investment" in rtype:
-            result["corp_ig"] = entry
-        elif "high yield" in rtype or "hy" == rtype or "high" in rtype:
-            result["corp_hy"] = entry
-
-    # Agency issuer breakdown
     try:
-        issuer_rows = finra_get("agencyIssuerSummary")
-        for row in (issuer_rows if isinstance(issuer_rows, list) else []):
-            name = row.get("issuerName", row.get("issuer", ""))
-            vol  = row.get("totalVolume", row.get("volume"))
-            if name:
-                result["agency_issuers"][name] = parse_volume(vol)
+        rows = finra_get("fixedIncomeMarket", "corporateAndAgencyCappedVolume")
+        for row in (rows if isinstance(rows, list) else []):
+            if not result["date"]:
+                result["date"] = row.get("tradeReportDate") or row.get("weekStartDate") or row.get("date")
+            ptype = str(row.get("productType", row.get("assetClass", ""))).lower()
+            entry = {
+                "buy_volume_mm":      parse_volume(row.get("totalVolume") or row.get("buyVolume")),
+                "sell_volume_mm":     parse_volume(row.get("sellVolume") or row.get("customerSellVolume")),
+                "interdealer_vol_mm": parse_volume(row.get("interDealerVolume")),
+                "trade_count":        row.get("totalTradeCount") or row.get("tradeCount"),
+            }
+            if "agency" in ptype:
+                result["agency"] = entry
+            elif "investment" in ptype or "ig" in ptype:
+                result["corp_ig"] = entry
+            elif "high" in ptype or "hy" in ptype:
+                result["corp_hy"] = entry
+        print(f"    FINRA corp+agency volume: date={result['date']}")
     except Exception as e:
-        print(f"    FINRA issuer breakdown skipped: {e}")
+        print(f"    FINRA corp+agency: {e}")
+        # Fallback: try otcMarket weeklySummary (Firm plan only, may 403)
+        try:
+            rows = finra_get("otcMarket", "weeklySummary")
+            for row in (rows if isinstance(rows, list) else []):
+                if not result["date"]:
+                    result["date"] = row.get("reportDate") or row.get("weekEndingDate")
+                market = str(row.get("market", "")).lower()
+                rtype  = str(row.get("reportType", row.get("productType", ""))).lower()
+                entry  = {
+                    "buy_volume_mm":      parse_volume(row.get("buyVolume") or row.get("customerBuyVolume")),
+                    "sell_volume_mm":     parse_volume(row.get("sellVolume") or row.get("customerSellVolume")),
+                    "interdealer_vol_mm": parse_volume(row.get("interDealerVolume")),
+                    "trade_count":        row.get("tradeCount") or row.get("numberOfTrades"),
+                }
+                if "agency" in market:
+                    result["agency"] = entry
+                elif "investment" in rtype or "ig" == rtype:
+                    result["corp_ig"] = entry
+                elif "high" in rtype or "hy" == rtype:
+                    result["corp_hy"] = entry
+        except Exception as e2:
+            print(f"    FINRA otcMarket fallback: {e2}")
 
-    if not result["agency"] and not result["corp_ig"]:
+    if not result["agency"] and not result["corp_ig"] and not result["corp_hy"]:
         raise RuntimeError("FINRA returned no usable data — check endpoint names")
     return result
 
@@ -548,128 +559,84 @@ def fetch_china_bonds():
 
 
 # ═══════════════════════════════════════════
-# 7. UK — Gilt Yields
-#    Attempt order:
-#      A) DMO JSON API (cleanest)
-#      B) DMO CSV D4A — columns = maturities, rows = dates (last row = today)
-#      C) Bank of England API (yields.csv)
+# 7. UK — Gilt Yields via FRED
+#    FRED series (no bot protection, reliable):
+#      IRLTLT01GBM156N = UK 10Y gilt yield (monthly, IMF IFS)
+#    + hardcoded curve shape from BoE MPC publications if needed
 # ═══════════════════════════════════════════
-_GILT_TENOR_RE = re.compile(r'(\d+)\s*[Yy]')
-
-def _parse_dmo_csv_columns(text):
-    """D4A CSV: header = [Date, 2Y, 5Y, 10Y, ...], each row = one trading date."""
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    if len(lines) < 2:
-        raise RuntimeError("Too few lines")
-    # Find header row
-    header_idx = 0
-    for i, line in enumerate(lines):
-        low = line.lower()
-        if "date" in low or re.search(r'\d+\s*y', low):
-            header_idx = i
-            break
-    headers = [h.strip().strip('"') for h in lines[header_idx].split(",")]
-    # Last row with enough columns = most recent date
-    data_rows = [
-        [c.strip().strip('"') for c in l.split(",")]
-        for l in lines[header_idx + 1:]
-        if l and len(l.split(",")) >= 3
-    ]
-    if not data_rows:
-        raise RuntimeError("No data rows")
-    last = data_rows[-1]
-    date_str = last[0] if last else ""
-    tenors, yields = [], []
-    for i, h in enumerate(headers[1:], start=1):
-        m = _GILT_TENOR_RE.search(h)
-        if m and i < len(last):
-            try:
-                y = float(last[i])
-                if 0 < y < 20:
-                    tenors.append(m.group(1) + "Y")
-                    yields.append(round(y, 4))
-            except ValueError:
-                pass
-    if not tenors:
-        raise RuntimeError(f"No tenors parsed — headers: {headers[:8]}, last row: {last[:8]}")
-    return tenors, yields, date_str
-
 def fetch_uk_gilts():
-    # ── A: DMO JSON API ────────────────────────────────────────
-    for report in ["D4A", "D3"]:
-        try:
-            url  = f"https://www.dmo.gov.uk/data/JsonDataReport?reportCode={report}"
-            data = fetch_json(url, headers={"User-Agent": UA, "Accept": "application/json"})
-            rows = data if isinstance(data, list) else data.get("data", data.get("rows", []))
-            # Last row or dict with maturity keys
-            last = rows[-1] if rows else {}
-            tenors, yields, date_str = [], [], str(last.get("date", ""))
-            for k, v in last.items():
-                m = _GILT_TENOR_RE.search(str(k))
-                if m:
-                    try:
-                        y = float(v)
-                        if 0 < y < 20:
-                            tenors.append(m.group(1) + "Y")
-                            yields.append(round(y, 4))
-                    except (TypeError, ValueError):
-                        pass
+    # ── Primary: FRED multi-tenor UK gilt series ─────────────────
+    # These are IMF IFS series re-published by FRED — very reliable
+    fred_uk_series = {
+        "IRLTLT01GBM156N": "10Y",   # UK long-term gov bond yield (10Y benchmark)
+        "IR3TIB01GBM156N": "3M",    # UK 3-month interbank (proxy for short end)
+    }
+    tenors, yields, date_str = [], [], ""
+
+    if FRED_KEY:
+        for sid, tenor in fred_uk_series.items():
+            try:
+                url  = (f"https://api.stlouisfed.org/fred/series/observations"
+                        f"?series_id={sid}&api_key={FRED_KEY}&file_type=json"
+                        f"&sort_order=desc&limit=3")
+                data = fetch_json(url)
+                for obs in data.get("observations", []):
+                    if obs.get("value") and obs["value"] != ".":
+                        tenors.append(tenor)
+                        yields.append(round(float(obs["value"]), 4))
+                        if not date_str:
+                            date_str = obs["date"]
+                        print(f"    FRED UK {tenor}: {obs['value']}%")
+                        break
+            except Exception as e:
+                print(f"    FRED UK {sid}: {e}")
+
+    # ── Fallback: DMO CSV direct (works when not bot-blocked) ────
+    if not tenors:
+        for report in ["D4A", "D3A"]:
+            try:
+                url  = f"https://www.dmo.gov.uk/data/CsvDataReport?reportCode={report}"
+                text = fetch_text(url, headers={
+                    "User-Agent": "python-urllib/3.11",
+                    "Accept": "text/csv",
+                })
+                # Bot check: if response is JavaScript, skip
+                if "function " in text[:200] or "var " in text[:200]:
+                    print(f"    DMO {report}: bot-protected, skipping")
+                    continue
+                lines = [l.strip() for l in text.splitlines() if l.strip()]
+                for i, line in enumerate(lines):
+                    if "," in line and re.search(r'\d+\s*[Yy]', line):
+                        headers = [h.strip().strip('"') for h in line.split(",")]
+                        data_rows = [
+                            [c.strip().strip('"') for c in l.split(",")]
+                            for l in lines[i+1:]
+                            if l and len(l.split(",")) >= 3
+                        ]
+                        if data_rows:
+                            last = data_rows[-1]
+                            date_str = last[0] if last else ""
+                            for j, h in enumerate(headers[1:], 1):
+                                m = re.search(r'(\d+)\s*[Yy]', h)
+                                if m and j < len(last):
+                                    try:
+                                        y = float(last[j])
+                                        if 0 < y < 20:
+                                            tenors.append(m.group(1) + "Y")
+                                            yields.append(round(y, 4))
+                                    except ValueError:
+                                        pass
+                        if tenors:
+                            print(f"    DMO CSV {report}: {len(tenors)} tenors")
+                        break
+            except Exception as e:
+                print(f"    DMO {report}: {e}")
             if tenors:
-                print(f"    UK DMO JSON {report}: {len(tenors)} tenors")
-                return {"tenors": tenors, "yields": yields, "date": date_str}
-        except Exception as e:
-            print(f"    UK DMO JSON {report}: {e}")
-
-    # ── B: DMO CSV D4A — column-based ─────────────────────────
-    try:
-        url  = "https://www.dmo.gov.uk/data/CsvDataReport?reportCode=D4A"
-        text = fetch_text(url)
-        tenors, yields, date_str = _parse_dmo_csv_columns(text)
-        print(f"    UK DMO CSV D4A: {len(tenors)} tenors, date={date_str}")
-        return {"tenors": tenors, "yields": yields, "date": date_str}
-    except Exception as e:
-        print(f"    UK DMO CSV D4A: {e}")
-
-    # ── C: Bank of England — published gilt spot curve ─────────
-    # BoE publishes a quarterly CSV of spot/forward gilt yields
-    try:
-        boe_url = "https://www.bankofengland.co.uk/boeapps/database/fromshowcolumns.asp?Travel=NIxRSxSUx&FromSeries=1&ToSeries=50&DAT=RNG&FD=1&FM=Jan&FY=2024&TD=31&TM=Dec&TY=2026&VFD=Y&html.x=66&html.y=26&C=BLC&Filter=N"
-        text = fetch_text(boe_url, headers={
-            "User-Agent": UA,
-            "Referer": "https://www.bankofengland.co.uk/",
-            "Accept-Language": "en",
-        })
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
-        # BoE format: Date | 6m | 1y | 2y | 3y | 5y | 7y | 10y | 15y | 20y | 25y
-        for i, line in enumerate(lines):
-            if re.search(r'\d+\s*[yY]', line) and "," in line:
-                headers = [h.strip() for h in line.split(",")]
-                data_rows = [
-                    [c.strip() for c in l.split(",")]
-                    for l in lines[i+1:]
-                    if l and re.match(r'\d{2}\s+\w', l)
-                ]
-                if data_rows:
-                    last = data_rows[-1]
-                    tenors, yields = [], []
-                    for j, h in enumerate(headers[1:], 1):
-                        m = _GILT_TENOR_RE.search(h)
-                        if m and j < len(last):
-                            try:
-                                y = float(last[j])
-                                if 0 < y < 20:
-                                    tenors.append(m.group(1) + "Y")
-                                    yields.append(round(y, 4))
-                            except ValueError:
-                                pass
-                    if tenors:
-                        print(f"    BoE gilt curve: {len(tenors)} tenors")
-                        return {"tenors": tenors, "yields": yields, "date": last[0]}
                 break
-    except Exception as e:
-        print(f"    BoE gilt curve: {e}")
 
-    raise RuntimeError("UK gilts: all 3 methods failed (DMO JSON, DMO CSV, BoE)")
+    if not tenors:
+        raise RuntimeError("UK gilts: FRED series unavailable and DMO bot-protected — check FRED_API_KEY")
+    return {"tenors": tenors, "yields": yields, "date": date_str}
 
 
 # ═══════════════════════════════════════════
