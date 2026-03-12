@@ -26,8 +26,8 @@ import xml.etree.ElementTree as ET
 
 OUTPUT_FILE        = "data/bonds.json"
 FRED_KEY           = os.environ.get("FRED_API_KEY", "")
-FINRA_CLIENT_ID    = os.environ.get("FINRA_CLIENT_ID", "")
-FINRA_CLIENT_SECRET= os.environ.get("FINRA_CLIENT_SECRET", "")
+FINRA_CLIENT_ID    = os.environ.get("FINRA_API_KEY", "")       # GitHub secret: FINRA_API_KEY
+FINRA_CLIENT_SECRET= os.environ.get("FINRA_CLIENT_SECRET", "") # GitHub secret: FINRA_CLIENT_SECRET
 
 UA = "FixedIncomeTerminal/2.0 (github.com/rubenrozen/Fixed-Income-Terminal)"
 
@@ -473,13 +473,17 @@ def fetch_china_bonds():
             print(f"    World Bank {indicator}: {e}")
 
     # ── OECD: China 10Y government bond yield ───────────────────
-    # Series: IRLTLT01.CNP.M = China long-term government bond yield (monthly)
+    # SDMX-JSON 2.1 wraps dataSets inside a "data" envelope
     try:
         url  = "https://stats.oecd.org/SDMX-JSON/data/MEI_FIN/IRLTLT01.CNP.M/all?lastNObservations=3&format=jsondata"
-        data = fetch_json(url, headers={"Accept": "application/json", "User-Agent": UA})
-        ds   = data.get("dataSets") or data.get("DataSets")
+        raw  = fetch_json(url, headers={"Accept": "application/json", "User-Agent": UA})
+        # Try both SDMX-JSON 1.0 (dataSets at root) and 2.x (inside "data")
+        ds = (raw.get("dataSets")
+              or raw.get("DataSets")
+              or raw.get("data", {}).get("dataSets")
+              or raw.get("data", {}).get("DataSets"))
         if not ds:
-            raise RuntimeError(f"No 'dataSets' key — keys found: {list(data.keys())}")
+            raise RuntimeError(f"dataSets not found — top keys: {list(raw.keys())}")
         series = ds[0]["series"]
         obs    = list(series.values())[0]["observations"]
         last   = obs[str(max(int(k) for k in obs))]
@@ -544,117 +548,128 @@ def fetch_china_bonds():
 
 
 # ═══════════════════════════════════════════
-# 7. UK DMO — Gilt Yields
-#    CSV endpoint tried first (simpler), XML as fallback
-#    Reports: D3 = benchmark by maturity; D4A = ISDA closing yields
+# 7. UK — Gilt Yields
+#    Attempt order:
+#      A) DMO JSON API (cleanest)
+#      B) DMO CSV D4A — columns = maturities, rows = dates (last row = today)
+#      C) Bank of England API (yields.csv)
 # ═══════════════════════════════════════════
+_GILT_TENOR_RE = re.compile(r'(\d+)\s*[Yy]')
+
+def _parse_dmo_csv_columns(text):
+    """D4A CSV: header = [Date, 2Y, 5Y, 10Y, ...], each row = one trading date."""
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    if len(lines) < 2:
+        raise RuntimeError("Too few lines")
+    # Find header row
+    header_idx = 0
+    for i, line in enumerate(lines):
+        low = line.lower()
+        if "date" in low or re.search(r'\d+\s*y', low):
+            header_idx = i
+            break
+    headers = [h.strip().strip('"') for h in lines[header_idx].split(",")]
+    # Last row with enough columns = most recent date
+    data_rows = [
+        [c.strip().strip('"') for c in l.split(",")]
+        for l in lines[header_idx + 1:]
+        if l and len(l.split(",")) >= 3
+    ]
+    if not data_rows:
+        raise RuntimeError("No data rows")
+    last = data_rows[-1]
+    date_str = last[0] if last else ""
+    tenors, yields = [], []
+    for i, h in enumerate(headers[1:], start=1):
+        m = _GILT_TENOR_RE.search(h)
+        if m and i < len(last):
+            try:
+                y = float(last[i])
+                if 0 < y < 20:
+                    tenors.append(m.group(1) + "Y")
+                    yields.append(round(y, 4))
+            except ValueError:
+                pass
+    if not tenors:
+        raise RuntimeError(f"No tenors parsed — headers: {headers[:8]}, last row: {last[:8]}")
+    return tenors, yields, date_str
+
 def fetch_uk_gilts():
-    # ── Attempt 1: CSV format (D3 = UK benchmark gilt yields by maturity) ──
-    try:
-        url  = "https://www.dmo.gov.uk/data/CsvDataReport?reportCode=D3"
-        text = fetch_text(url)
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
-        # Find header
-        header_idx = next((i for i, l in enumerate(lines) if "," in l and any(x in l.lower() for x in ["maturity","tenor","years","yield","term"])), None)
-        if header_idx is not None:
-            headers = [h.strip().strip('"').lower() for h in lines[header_idx].split(",")]
-            tenors, yields = [], []
-            for line in lines[header_idx + 1:]:
-                parts = [p.strip().strip('"') for p in line.split(",")]
-                if len(parts) < 2:
-                    continue
-                # First col = maturity label, last numeric col = yield
-                label = parts[0]
-                for p in reversed(parts[1:]):
+    # ── A: DMO JSON API ────────────────────────────────────────
+    for report in ["D4A", "D3"]:
+        try:
+            url  = f"https://www.dmo.gov.uk/data/JsonDataReport?reportCode={report}"
+            data = fetch_json(url, headers={"User-Agent": UA, "Accept": "application/json"})
+            rows = data if isinstance(data, list) else data.get("data", data.get("rows", []))
+            # Last row or dict with maturity keys
+            last = rows[-1] if rows else {}
+            tenors, yields, date_str = [], [], str(last.get("date", ""))
+            for k, v in last.items():
+                m = _GILT_TENOR_RE.search(str(k))
+                if m:
                     try:
-                        y = float(p)
+                        y = float(v)
                         if 0 < y < 20:
-                            tenors.append(label)
+                            tenors.append(m.group(1) + "Y")
                             yields.append(round(y, 4))
-                            break
-                    except ValueError:
+                    except (TypeError, ValueError):
                         pass
             if tenors:
-                print(f"    UK DMO CSV D3: {len(tenors)} tenors")
-                return {"tenors": tenors, "yields": yields, "date": ""}
-        print("    UK DMO CSV D3: no tenors parsed, trying D4A CSV…")
-    except Exception as e:
-        print(f"    UK DMO CSV D3: {e}")
+                print(f"    UK DMO JSON {report}: {len(tenors)} tenors")
+                return {"tenors": tenors, "yields": yields, "date": date_str}
+        except Exception as e:
+            print(f"    UK DMO JSON {report}: {e}")
 
-    # ── Attempt 2: CSV format D4A (ISDA gilt yields) ──
+    # ── B: DMO CSV D4A — column-based ─────────────────────────
     try:
         url  = "https://www.dmo.gov.uk/data/CsvDataReport?reportCode=D4A"
         text = fetch_text(url)
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
-        tenors, yields, date_str = [], [], ""
-        t_re = re.compile(r'(\d+)\s*[Yy](?:ear)?')
-        for line in lines[1:]:          # skip header
-            parts = [p.strip().strip('"') for p in line.split(",")]
-            if not parts or not parts[0]:
-                continue
-            m = t_re.search(parts[0])
-            for p in reversed(parts[1:]):
-                try:
-                    y = float(p)
-                    if 0 < y < 20 and m:
-                        tenors.append(m.group(1) + "Y")
-                        yields.append(round(y, 4))
-                        break
-                except ValueError:
-                    pass
-        if tenors:
-            print(f"    UK DMO CSV D4A: {len(tenors)} tenors")
-            return {"tenors": tenors, "yields": yields, "date": date_str}
-        print("    UK DMO CSV D4A: no tenors parsed, trying XML…")
+        tenors, yields, date_str = _parse_dmo_csv_columns(text)
+        print(f"    UK DMO CSV D4A: {len(tenors)} tenors, date={date_str}")
+        return {"tenors": tenors, "yields": yields, "date": date_str}
     except Exception as e:
         print(f"    UK DMO CSV D4A: {e}")
 
-    # ── Attempt 3: XML fallback with debug output ──
-    url  = "https://www.dmo.gov.uk/data/XmlDataReport?reportCode=D4A"
-    text = fetch_text(url)
-    root = ET.fromstring(text)
+    # ── C: Bank of England — published gilt spot curve ─────────
+    # BoE publishes a quarterly CSV of spot/forward gilt yields
+    try:
+        boe_url = "https://www.bankofengland.co.uk/boeapps/database/fromshowcolumns.asp?Travel=NIxRSxSUx&FromSeries=1&ToSeries=50&DAT=RNG&FD=1&FM=Jan&FY=2024&TD=31&TM=Dec&TY=2026&VFD=Y&html.x=66&html.y=26&C=BLC&Filter=N"
+        text = fetch_text(boe_url, headers={
+            "User-Agent": UA,
+            "Referer": "https://www.bankofengland.co.uk/",
+            "Accept-Language": "en",
+        })
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        # BoE format: Date | 6m | 1y | 2y | 3y | 5y | 7y | 10y | 15y | 20y | 25y
+        for i, line in enumerate(lines):
+            if re.search(r'\d+\s*[yY]', line) and "," in line:
+                headers = [h.strip() for h in line.split(",")]
+                data_rows = [
+                    [c.strip() for c in l.split(",")]
+                    for l in lines[i+1:]
+                    if l and re.match(r'\d{2}\s+\w', l)
+                ]
+                if data_rows:
+                    last = data_rows[-1]
+                    tenors, yields = [], []
+                    for j, h in enumerate(headers[1:], 1):
+                        m = _GILT_TENOR_RE.search(h)
+                        if m and j < len(last):
+                            try:
+                                y = float(last[j])
+                                if 0 < y < 20:
+                                    tenors.append(m.group(1) + "Y")
+                                    yields.append(round(y, 4))
+                            except ValueError:
+                                pass
+                    if tenors:
+                        print(f"    BoE gilt curve: {len(tenors)} tenors")
+                        return {"tenors": tenors, "yields": yields, "date": last[0]}
+                break
+    except Exception as e:
+        print(f"    BoE gilt curve: {e}")
 
-    # Print first 300 chars of XML for debugging in GitHub Actions log
-    print(f"    UK DMO XML preview: {text[:300].replace(chr(10),' ')}")
-
-    rows = (root.findall(".//ISDAGILTYIELD")
-            or root.findall(".//{*}ISDAGILTYIELD")
-            or [el for el in root.iter() if len(list(el)) > 2])
-
-    if not rows:
-        raise RuntimeError("UK DMO XML: no data rows — check XML preview above in logs")
-
-    last = rows[-1]
-    tenors, yields, date_str = [], [], ""
-    for child in last:
-        tag = (child.tag.split("}")[-1] if "}" in child.tag else child.tag).upper()
-        txt = (child.text or "").strip()
-        if not txt:
-            continue
-        if "DATE" in tag:
-            date_str = txt
-            continue
-        if any(x in tag for x in ["ISIN","NAME","TYPE","STATUS","CURRENCY"]):
-            continue
-        try:
-            val = float(txt)
-            if not (0 < val < 20):
-                continue
-            # Try to extract tenor from tag name
-            m = re.search(r'(\d+)', tag)
-            if m:
-                yr = int(m.group(1))
-                if 1 <= yr <= 60:
-                    label = f"{yr}Y"
-                    if label not in tenors:
-                        tenors.append(label)
-                        yields.append(round(val, 4))
-        except ValueError:
-            pass
-
-    if not tenors:
-        raise RuntimeError("UK DMO: all 3 methods failed — see XML preview in GitHub Actions log")
-    return {"tenors": tenors, "yields": yields, "date": date_str}
+    raise RuntimeError("UK gilts: all 3 methods failed (DMO JSON, DMO CSV, BoE)")
 
 
 # ═══════════════════════════════════════════
