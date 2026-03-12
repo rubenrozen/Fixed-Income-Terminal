@@ -6,28 +6,24 @@ Sources (all free):
   FRED API                → spreads, SOFR, history (free key: fred.stlouisfed.org/docs/api/api_key.html)
   ECB SDW REST API        → EU/Bund curves         (no key)
   Bank of Japan CSV       → JGB yields             (no key)
-  FINRA Market Data API   → Agency + Corp volumes  (free key: developer.finra.org — needs client_id + client_secret)
   World Bank API          → China macro data       (no key)
-  UK DMO XML              → Gilt yields            (no key)
+  OECD SDMX API          → China 10Y yield        (no key)
+  FRED (UK series)        → Gilt yields            (same FRED key)
 
 Environment variables (set as GitHub Secrets):
   FRED_API_KEY          → FRED
-  FINRA_CLIENT_ID       → FINRA OAuth2 client_id
-  FINRA_CLIENT_SECRET   → FINRA OAuth2 client_secret
 
 Run:  python fetch_data.py
 Out:  data/bonds.json
 """
 
-import json, os, sys, re, base64
+import json, os, sys, re
 from datetime import datetime, timezone, timedelta
 import urllib.request, urllib.parse, urllib.error
 import xml.etree.ElementTree as ET
 
-OUTPUT_FILE        = "data/bonds.json"
-FRED_KEY           = os.environ.get("FRED_API_KEY", "")
-FINRA_CLIENT_ID    = os.environ.get("FINRA_API_KEY", "")       # GitHub secret: FINRA_API_KEY
-FINRA_CLIENT_SECRET= os.environ.get("FINRA_CLIENT_SECRET", "") # GitHub secret: FINRA_CLIENT_SECRET
+OUTPUT_FILE = "data/bonds.json"
+FRED_KEY    = os.environ.get("FRED_API_KEY", "")
 
 UA = "FixedIncomeTerminal/2.0 (github.com/rubenrozen/Fixed-Income-Terminal)"
 
@@ -338,128 +334,6 @@ def fetch_boj():
 
 
 # ═══════════════════════════════════════════
-# 5. FINRA TRACE API
-#    api.finra.org — OAuth2 (free registration)
-#    Register at developer.finra.org
-#    You get client_id + client_secret — BOTH needed
-#    GitHub Secrets: FINRA_CLIENT_ID  and  FINRA_CLIENT_SECRET
-#
-#  Note: if you only have one "API key" from FINRA, set it as
-#  FINRA_CLIENT_ID and leave FINRA_CLIENT_SECRET empty —
-#  the script will try a single-key auth as fallback.
-# ═══════════════════════════════════════════
-_finra_token = None
-
-def get_finra_token():
-    global _finra_token
-    if _finra_token:
-        return _finra_token
-    if not FINRA_CLIENT_ID:
-        raise RuntimeError("FINRA_CLIENT_ID not set in environment / GitHub Secrets")
-
-    creds = base64.b64encode(
-        f"{FINRA_CLIENT_ID}:{FINRA_CLIENT_SECRET}".encode()
-    ).decode()
-
-    # Official FINRA token endpoint (from developer.finra.org/docs#authorization)
-    # grant_type is in query string only — do NOT put it in body too
-    token_url = "https://ews.fip.finra.org/fip/rest/ews/oauth2/access_token?grant_type=client_credentials"
-    last_err = None
-    try:
-        resp = fetch_json(
-            token_url,
-            headers={
-                "Authorization": f"Basic {creds}",
-                "Content-Type":  "application/x-www-form-urlencoded",
-                "Accept":        "application/json",
-            },
-            data=b"",  # empty body forces POST — grant_type is in URL query string
-        )
-        token = resp.get("access_token") or resp.get("token")
-        if token:
-            print(f"    FINRA token ✅ obtained")
-            _finra_token = token
-            return _finra_token
-        last_err = f"No token in response — keys: {list(resp.keys())}"
-    except Exception as e:
-        last_err = str(e)
-
-    raise RuntimeError(
-        f"FINRA token failed. Last error: {last_err}\n"
-        "    → Check FINRA_API_KEY and FINRA_CLIENT_SECRET at developer.finra.org"
-    )
-
-def finra_get(group, endpoint):
-    token = get_finra_token()
-    return fetch_json(
-        f"https://api.finra.org/data/group/{group}/name/{endpoint}",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept":        "application/json",
-        },
-    )
-
-def parse_volume(v):
-    try:
-        return round(float(v) / 1e6, 1) if v else None
-    except (TypeError, ValueError):
-        return None
-
-def fetch_finra():
-    # fixedIncomeMarket group — accessible with Public plan
-    # corporateAndAgencyCappedVolume: weekly corp + agency TRACE volumes
-    result = {"date": None, "agency": {}, "corp_ig": {}, "corp_hy": {}, "agency_issuers": {}}
-
-    try:
-        rows = finra_get("fixedIncomeMarket", "corporateAndAgencyCappedVolume")
-        for row in (rows if isinstance(rows, list) else []):
-            if not result["date"]:
-                result["date"] = row.get("tradeReportDate") or row.get("weekStartDate") or row.get("date")
-            ptype = str(row.get("productType", row.get("assetClass", ""))).lower()
-            entry = {
-                "buy_volume_mm":      parse_volume(row.get("totalVolume") or row.get("buyVolume")),
-                "sell_volume_mm":     parse_volume(row.get("sellVolume") or row.get("customerSellVolume")),
-                "interdealer_vol_mm": parse_volume(row.get("interDealerVolume")),
-                "trade_count":        row.get("totalTradeCount") or row.get("tradeCount"),
-            }
-            if "agency" in ptype:
-                result["agency"] = entry
-            elif "investment" in ptype or "ig" in ptype:
-                result["corp_ig"] = entry
-            elif "high" in ptype or "hy" in ptype:
-                result["corp_hy"] = entry
-        print(f"    FINRA corp+agency volume: date={result['date']}")
-    except Exception as e:
-        print(f"    FINRA corp+agency: {e}")
-        # Fallback: try otcMarket weeklySummary (Firm plan only, may 403)
-        try:
-            rows = finra_get("otcMarket", "weeklySummary")
-            for row in (rows if isinstance(rows, list) else []):
-                if not result["date"]:
-                    result["date"] = row.get("reportDate") or row.get("weekEndingDate")
-                market = str(row.get("market", "")).lower()
-                rtype  = str(row.get("reportType", row.get("productType", ""))).lower()
-                entry  = {
-                    "buy_volume_mm":      parse_volume(row.get("buyVolume") or row.get("customerBuyVolume")),
-                    "sell_volume_mm":     parse_volume(row.get("sellVolume") or row.get("customerSellVolume")),
-                    "interdealer_vol_mm": parse_volume(row.get("interDealerVolume")),
-                    "trade_count":        row.get("tradeCount") or row.get("numberOfTrades"),
-                }
-                if "agency" in market:
-                    result["agency"] = entry
-                elif "investment" in rtype or "ig" == rtype:
-                    result["corp_ig"] = entry
-                elif "high" in rtype or "hy" == rtype:
-                    result["corp_hy"] = entry
-        except Exception as e2:
-            print(f"    FINRA otcMarket fallback: {e2}")
-
-    if not result["agency"] and not result["corp_ig"] and not result["corp_hy"]:
-        raise RuntimeError("FINRA returned no usable data — check endpoint names")
-    return result
-
-
-# ═══════════════════════════════════════════
 # 6. CHINA — OECD + FRED + World Bank
 #    All free, no key (FRED key used if available)
 #    ADB / CCDC removed — URLs no longer stable
@@ -645,21 +519,18 @@ def fetch_uk_gilts():
 # ═══════════════════════════════════════════
 def main():
     print("\n🔄 Fixed Income Terminal — Data Fetcher v2")
-    print(f"   Timestamp:    {datetime.now(timezone.utc).isoformat()}")
-    print(f"   FRED key:     {'✅ set' if FRED_KEY else '❌ missing — set FRED_API_KEY'}")
-    print(f"   FINRA id:     {'✅ set' if FINRA_CLIENT_ID else '❌ missing — set FINRA_CLIENT_ID'}")
-    print(f"   FINRA secret: {'✅ set' if FINRA_CLIENT_SECRET else '❌ missing — set FINRA_CLIENT_SECRET'}\n")
+    print(f"   Timestamp: {datetime.now(timezone.utc).isoformat()}")
+    print(f"   FRED key:  {'✅ set' if FRED_KEY else '❌ missing — set FRED_API_KEY'}\n")
 
     output = {"last_updated": datetime.now(timezone.utc).isoformat(), "errors": {}}
 
     steps = [
-        ("US Treasury yield curve",      fetch_us_treasury,  "us_treasury"),
-        ("FRED spreads + history",        fetch_fred,         "fred"),
-        ("ECB yield curves",             fetch_ecb,          "ecb"),
-        ("Bank of Japan JGB",            fetch_boj,          "boj"),
-        ("FINRA TRACE volumes",          fetch_finra,        "finra"),
-        ("China bond market",            fetch_china_bonds,  "china"),
-        ("UK Gilt yields",               fetch_uk_gilts,     "uk_gilts"),
+        ("US Treasury yield curve", fetch_us_treasury,  "us_treasury"),
+        ("FRED spreads + history",  fetch_fred,         "fred"),
+        ("ECB yield curves",        fetch_ecb,          "ecb"),
+        ("Bank of Japan JGB",       fetch_boj,          "boj"),
+        ("China bond market",       fetch_china_bonds,  "china"),
+        ("UK Gilt yields",          fetch_uk_gilts,     "uk_gilts"),
     ]
 
     for label, fn, key in steps:
