@@ -614,45 +614,103 @@ function buildECBTable() {
 /* ══════════════════════════════════════
    US CREDIT (FRED) — replaces FINRA panels
 ══════════════════════════════════════ */
+function chgCell(v, isBps=true) {
+  if (v == null) return '<td class="t-val" style="color:var(--text3)">—</td>';
+  const sign = v > 0 ? '+' : '';
+  const cls  = v > 0 ? 't-pos' : v < 0 ? 't-neg' : '';
+  const label = isBps ? `${sign}${v.toFixed(1)} bps` : `${sign}${v.toFixed(2)}%`;
+  return `<td class="t-val ${cls}">${label}</td>`;
+}
+ 
 function buildAgencyFREDTable() {
-  const f = DATA?.fred || {};
+  const f   = DATA?.fred || {};
   const ust = DATA?.us_treasury || {};
-  const getY = (tenor) => { const i=(ust.tenors||[]).indexOf(tenor); return i>=0&&ust.yields[i]!=null?ust.yields[i]:null; };
+  const getY = t => { const i=(ust.tenors||[]).indexOf(t); return i>=0&&ust.yields[i]!=null?ust.yields[i]:null; };
+ 
   const rows = [
-    {label:'SOFR (overnight)',    val: f.sofr!=null?fmt(f.sofr,2)+'%':'—',      src:'FRED SOFR'},
-    {label:'UST 2Y',              val: getY('2Y')!=null?fmt(getY('2Y'),2)+'%':'—', src:'US Treasury'},
-    {label:'UST 5Y',              val: getY('5Y')!=null?fmt(getY('5Y'),2)+'%':'—', src:'US Treasury'},
-    {label:'UST 10Y',             val: getY('10Y')!=null?fmt(getY('10Y'),2)+'%':'—',src:'US Treasury'},
-    {label:'2Y–10Y Spread',       val: f.t10y2y!=null?fmt(f.t10y2y,2)+'%':'—',  src:'FRED T10Y2Y'},
+    {
+      label: 'SOFR',
+      val:   f.sofr!=null ? fmt(f.sofr,2)+'%' : '—',
+      chg1d: f.sofr_chg_1d, chg1w: f.sofr_chg_1w, chg1m: f.sofr_chg_1m,
+      src:   'FRED SOFR', bps: false,
+    },
+    {
+      label: 'UST 2Y',
+      val:   getY('2Y')!=null ? fmt(getY('2Y'),2)+'%' : '—',
+      chg1d: null, chg1w: null, chg1m: null,
+      src:   'US Treasury', bps: false,
+    },
+    {
+      label: 'UST 5Y',
+      val:   getY('5Y')!=null ? fmt(getY('5Y'),2)+'%' : '—',
+      chg1d: null, chg1w: null, chg1m: null,
+      src:   'US Treasury', bps: false,
+    },
+    {
+      label: 'UST 10Y',
+      val:   getY('10Y')!=null ? fmt(getY('10Y'),2)+'%' : '—',
+      chg1d: null, chg1w: null, chg1m: null,
+      src:   'US Treasury', bps: false,
+    },
+    {
+      label: '2Y–10Y Spread',
+      val:   f.t10y2y!=null ? fmt(f.t10y2y,2)+'%' : '—',
+      chg1d: f.t10y2y_chg_1d, chg1w: f.t10y2y_chg_1w, chg1m: f.t10y2y_chg_1m,
+      src:   'FRED T10Y2Y', bps: false,
+    },
   ];
   return `<table class="bond-table"><thead><tr>
-    <th>Indicator</th><th>Value</th><th>Source</th>
+    <th>Indicator</th><th>Value</th><th>1D</th><th>1W</th><th>1M</th><th>Source</th>
   </tr></thead><tbody>
   ${rows.map(r=>`<tr>
     <td class="t-name">${r.label}</td>
     <td class="t-val">${r.val}</td>
+    ${chgCell(r.chg1d, r.bps)}${chgCell(r.chg1w, r.bps)}${chgCell(r.chg1m, r.bps)}
     <td style="font-size:9px;color:var(--text3)">${r.src}</td>
   </tr>`).join('')}
   </tbody></table>
-  <div style="padding:8px 12px;font-size:9px;color:var(--text3)">⚠ Granular agency TRACE volumes (FNMA, FHLB, GNMA) require FINRA Firm plan access.</div>`;
+  <div style="padding:6px 12px;font-size:9px;color:var(--text3)">⚠ Buy/Sell volumes (FNMA, FHLB, GNMA) nécessitent FINRA Firm plan.</div>`;
 }
  
 function buildCorpFREDTable() {
   const f = DATA?.fred || {};
   if (!f.ig_spread_bps && !f.hy_spread_bps) return noData('FRED spread data not loaded');
   const rows = [
-    {label:'Investment Grade OAS', val: f.ig_spread_bps!=null?fmtBps(f.ig_spread_bps):'—', note:'ICE BofA IG Corp Index'},
-    {label:'High Yield OAS',       val: f.hy_spread_bps!=null?fmtBps(f.hy_spread_bps):'—', note:'ICE BofA HY Corp Index'},
-    {label:'HY minus IG',          val: f.ig_spread_bps!=null&&f.hy_spread_bps!=null?fmtBps(f.hy_spread_bps-f.ig_spread_bps):'—', note:'Credit risk premium'},
-    {label:'SOFR',                 val: f.sofr!=null?fmt(f.sofr,2)+'%':'—',                note:'Risk-free benchmark'},
+    {
+      label: 'Investment Grade OAS',
+      val:   f.ig_spread_bps!=null ? fmtBps(f.ig_spread_bps) : '—',
+      chg1d: f.ig_chg_1d, chg1w: f.ig_chg_1w, chg1m: f.ig_chg_1m,
+      src:   'ICE BofA IG',
+    },
+    {
+      label: 'High Yield OAS',
+      val:   f.hy_spread_bps!=null ? fmtBps(f.hy_spread_bps) : '—',
+      chg1d: f.hy_chg_1d, chg1w: f.hy_chg_1w, chg1m: f.hy_chg_1m,
+      src:   'ICE BofA HY',
+    },
+    {
+      label: 'HY minus IG',
+      val:   f.ig_spread_bps!=null&&f.hy_spread_bps!=null ? fmtBps(f.hy_spread_bps-f.ig_spread_bps) : '—',
+      chg1d: f.ig_chg_1d!=null&&f.hy_chg_1d!=null ? f.hy_chg_1d-f.ig_chg_1d : null,
+      chg1w: f.ig_chg_1w!=null&&f.hy_chg_1w!=null ? f.hy_chg_1w-f.ig_chg_1w : null,
+      chg1m: f.ig_chg_1m!=null&&f.hy_chg_1m!=null ? f.hy_chg_1m-f.ig_chg_1m : null,
+      src:   'Spread vs IG',
+    },
+    {
+      label: 'SOFR',
+      val:   f.sofr!=null ? fmt(f.sofr,2)+'%' : '—',
+      chg1d: f.sofr_chg_1d, chg1w: f.sofr_chg_1w, chg1m: f.sofr_chg_1m,
+      src:   'FRED SOFR',
+    },
   ];
   return `<table class="bond-table"><thead><tr>
-    <th>Segment</th><th>Spread / Rate</th><th>Index</th>
+    <th>Segment</th><th>Spread</th><th>1D</th><th>1W</th><th>1M</th><th>Index</th>
   </tr></thead><tbody>
   ${rows.map(r=>`<tr>
     <td class="t-name">${r.label}</td>
     <td class="t-val">${r.val}</td>
-    <td style="font-size:9px;color:var(--text3)">${r.note}</td>
+    ${chgCell(r.chg1d)}${chgCell(r.chg1w)}${chgCell(r.chg1m)}
+    <td style="font-size:9px;color:var(--text3)">${r.src}</td>
   </tr>`).join('')}
   </tbody></table>`;
 }
@@ -1107,3 +1165,4 @@ loadData();
 </script>
 </body>
 </html>
+ 
