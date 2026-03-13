@@ -293,10 +293,17 @@ function buildHTML() {
         <div class="grid-4">${buildUSKPIs()}</div>
       </div>
       <div class="section">
-        <div class="section-label">US Credit Market — TRACE Spreads</div>
+        <div class="section-label">Agency Bond Market</div>
         <div class="grid-2">
-          ${buildPanel('IG & HY Spreads','Option-adjusted spreads vs Treasuries','pop-left',INFO.agencySec,buildFREDCreditTable())}
-          ${buildPanel('Spread History','24-month IG/HY OAS evolution','pop-right',INFO.tradeTypes,buildFREDCreditNote())}
+          ${buildPanel('Securities Overview','OAS vs Treasuries · FRED','pop-left',INFO.agencySec,buildAgencyFREDTable())}
+          ${buildPanel('US Credit Market','IG & HY option-adjusted spreads','pop-right',INFO.tradeTypes,buildFREDCreditTable())}
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Corporate 144A Bond Market</div>
+        <div class="grid-2">
+          ${buildPanel('IG & HY Spreads','ICE BofA indices via FRED','pop-left',INFO.corp144a,buildCorpFREDTable())}
+          ${buildPanel('Spread History','24-month OAS evolution','pop-right',INFO.tradeTypes,buildFREDCreditNote())}
         </div>
       </div>
     </div>
@@ -607,6 +614,49 @@ function buildECBTable() {
 /* ══════════════════════════════════════
    US CREDIT (FRED) — replaces FINRA panels
 ══════════════════════════════════════ */
+function buildAgencyFREDTable() {
+  const f = DATA?.fred || {};
+  const ust = DATA?.us_treasury || {};
+  const getY = (tenor) => { const i=(ust.tenors||[]).indexOf(tenor); return i>=0&&ust.yields[i]!=null?ust.yields[i]:null; };
+  const rows = [
+    {label:'SOFR (overnight)',    val: f.sofr!=null?fmt(f.sofr,2)+'%':'—',      src:'FRED SOFR'},
+    {label:'UST 2Y',              val: getY('2Y')!=null?fmt(getY('2Y'),2)+'%':'—', src:'US Treasury'},
+    {label:'UST 5Y',              val: getY('5Y')!=null?fmt(getY('5Y'),2)+'%':'—', src:'US Treasury'},
+    {label:'UST 10Y',             val: getY('10Y')!=null?fmt(getY('10Y'),2)+'%':'—',src:'US Treasury'},
+    {label:'2Y–10Y Spread',       val: f.t10y2y!=null?fmt(f.t10y2y,2)+'%':'—',  src:'FRED T10Y2Y'},
+  ];
+  return `<table class="bond-table"><thead><tr>
+    <th>Indicator</th><th>Value</th><th>Source</th>
+  </tr></thead><tbody>
+  ${rows.map(r=>`<tr>
+    <td class="t-name">${r.label}</td>
+    <td class="t-val">${r.val}</td>
+    <td style="font-size:9px;color:var(--text3)">${r.src}</td>
+  </tr>`).join('')}
+  </tbody></table>
+  <div style="padding:8px 12px;font-size:9px;color:var(--text3)">⚠ Granular agency TRACE volumes (FNMA, FHLB, GNMA) require FINRA Firm plan access.</div>`;
+}
+ 
+function buildCorpFREDTable() {
+  const f = DATA?.fred || {};
+  if (!f.ig_spread_bps && !f.hy_spread_bps) return noData('FRED spread data not loaded');
+  const rows = [
+    {label:'Investment Grade OAS', val: f.ig_spread_bps!=null?fmtBps(f.ig_spread_bps):'—', note:'ICE BofA IG Corp Index'},
+    {label:'High Yield OAS',       val: f.hy_spread_bps!=null?fmtBps(f.hy_spread_bps):'—', note:'ICE BofA HY Corp Index'},
+    {label:'HY minus IG',          val: f.ig_spread_bps!=null&&f.hy_spread_bps!=null?fmtBps(f.hy_spread_bps-f.ig_spread_bps):'—', note:'Credit risk premium'},
+    {label:'SOFR',                 val: f.sofr!=null?fmt(f.sofr,2)+'%':'—',                note:'Risk-free benchmark'},
+  ];
+  return `<table class="bond-table"><thead><tr>
+    <th>Segment</th><th>Spread / Rate</th><th>Index</th>
+  </tr></thead><tbody>
+  ${rows.map(r=>`<tr>
+    <td class="t-name">${r.label}</td>
+    <td class="t-val">${r.val}</td>
+    <td style="font-size:9px;color:var(--text3)">${r.note}</td>
+  </tr>`).join('')}
+  </tbody></table>`;
+}
+ 
 function buildFREDCreditTable() {
   const f = DATA?.fred || {};
   if (!f.ig_spread_bps && !f.hy_spread_bps) return noData('FRED spread data not loaded');
