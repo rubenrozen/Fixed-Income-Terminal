@@ -802,7 +802,7 @@ function buildFREDCreditNote() {
   const gauge = (p) => {
     if (p==null) return '';
     const color = p<25?'var(--green)':p>75?'var(--red)':'var(--amber)';
-    const label = p<25?'TIGHT · Risk-on':'p>75?'WIDE · Risk-off':'MODERATE';
+    const label = p<25?'TIGHT · Risk-on':p>75?'WIDE · Risk-off':'MODERATE';
     return `<div style="margin-top:4px;height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden">
       <div style="width:${p}%;height:100%;background:${color};border-radius:2px;transition:width .5s"></div></div>
       <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--text3);margin-top:2px">
