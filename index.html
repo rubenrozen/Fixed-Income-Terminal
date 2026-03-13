@@ -612,7 +612,7 @@ function buildECBTable() {
 }
 
 /* ══════════════════════════════════════
-   US CREDIT — FINRA Market Breadth + FRED fallback
+   US CREDIT — FINRA Market Breadth + FRED
 ══════════════════════════════════════ */
 function chgCell(v, isBps=true) {
   if (v == null) return '<td class="t-val" style="color:var(--text3)">—</td>';
@@ -622,127 +622,143 @@ function chgCell(v, isBps=true) {
   return `<td class="t-val ${cls}">${label}</td>`;
 }
 
-// ── Agency: FINRA breadth (FNMA / FHLB / FHLMC) ─────────────────
+// ── Agency: FINRA totals (ALL) + UST reference ───────────────────
 function buildAgencyFREDTable() {
   const finra  = DATA?.finra;
   const agency = finra?.agency;
-  const date   = finra?.date ? `<div style="padding:6px 12px;font-size:9px;color:var(--text3)">Trade date: ${finra.date}</div>` : '';
+  const fred   = DATA?.fred || {};
+  const ust    = DATA?.us_treasury || {};
+  const getY   = t => { const i=(ust.tenors||[]).indexOf(t); return i>=0&&ust.yields[i]!=null?ust.yields[i]:null; };
+  const date   = finra?.date ? `<div style="padding:4px 12px 8px;font-size:9px;color:var(--text3)">Trade date: ${finra.date}</div>` : '';
 
-  // If we have real FINRA data, render full breakdown
-  if (agency && Object.keys(agency).length > 0) {
-    // Display order: All, then key issuers
-    const ORDER  = ['ALL','FNMA','FHLB','FHLMC','GNMA','FFCB','TVA','OTHER'];
-    const LABELS = {ALL:'All Agency', FNMA:'Fannie Mae (FNMA)', FHLB:'FHLB',
-                    FHLMC:'Freddie Mac (FHLMC)', GNMA:'Ginnie Mae (GNMA)',
-                    FFCB:'Farm Credit (FFCB)', TVA:'TVA', OTHER:'Other'};
-    const keys   = ORDER.filter(k => agency[k]);
-    const rows   = keys.map(k => {
-      const d   = agency[k];
-      const vol = d.dollar_volume_mm != null ? '$' + fmt(d.dollar_volume_mm, 0) + 'M' : '—';
-      const adv = d.advances  != null ? `<span class="t-pos">▲${d.advances}</span>`  : '—';
-      const dec = d.declines  != null ? `<span class="t-neg">▼${d.declines}</span>`  : '—';
-      const unch= d.unchanged != null ? d.unchanged : '—';
-      const hi  = d.highs_52w != null ? d.highs_52w : '—';
-      const lo  = d.lows_52w  != null ? d.lows_52w  : '—';
-      const rowStyle = k === 'ALL' ? 'font-weight:600' : 'padding-left:18px;font-size:10.5px';
-      return `<tr>
-        <td class="t-name" style="${rowStyle}">${LABELS[k] || k}</td>
+  let finraBlock = '';
+  const all = agency?.ALL;
+  if (all) {
+    // FINRA has ALL-level breadth data
+    const vol  = all.dollar_volume_mm != null ? '$' + fmt(all.dollar_volume_mm, 0) + 'M' : '—';
+    const adv  = all.advances  != null ? all.advances  : '—';
+    const dec  = all.declines  != null ? all.declines  : '—';
+    const unch = all.unchanged != null ? all.unchanged : '—';
+    const total= all.total     > 0     ? all.total     : '—';
+    const hi   = all.highs_52w != null ? all.highs_52w : '—';
+    const lo   = all.lows_52w  != null ? all.lows_52w  : '—';
+    const pctAdv = all.total > 0 && all.advances != null
+      ? `<span style="font-size:9px;color:var(--text3)"> ${Math.round(all.advances/all.total*100)}%</span>` : '';
+    const pctDec = all.total > 0 && all.declines != null
+      ? `<span style="font-size:9px;color:var(--text3)"> ${Math.round(all.declines/all.total*100)}%</span>` : '';
+
+    finraBlock = date + `
+    <div style="padding:10px 12px 4px;font-size:9px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">FINRA TRACE — Agency Market Breadth</div>
+    <table class="bond-table"><thead><tr>
+      <th>Market</th><th>$ Volume</th><th style="color:var(--green)">Adv</th><th style="color:var(--red)">Dec</th><th>Unch</th><th>Issues</th><th>52W Hi/Lo</th>
+    </tr></thead><tbody>
+      <tr>
+        <td class="t-name" style="font-weight:600">All Agency</td>
         <td class="t-val">${vol}</td>
-        <td class="t-val">${adv}</td>
-        <td class="t-val">${dec}</td>
+        <td class="t-val t-pos">${adv}${pctAdv}</td>
+        <td class="t-val t-neg">${dec}${pctDec}</td>
         <td class="t-val">${unch}</td>
+        <td class="t-val" style="color:var(--text3)">${total}</td>
         <td class="t-val">${hi} / ${lo}</td>
-      </tr>`;
-    }).join('');
-    return date + `<table class="bond-table"><thead><tr>
-      <th>Issuer</th><th>$ Volume</th><th>Advances</th><th>Declines</th><th>Unch.</th><th>52W Hi/Lo</th>
-    </tr></thead><tbody>${rows}</tbody></table>
-    <div style="padding:6px 12px;font-size:9px;color:var(--text3)">Source: FINRA TRACE Market Breadth</div>`;
+      </tr>
+    </tbody></table>
+    <div style="padding:3px 12px 10px;font-size:9px;color:var(--text3)">Issuer breakdown (FNMA/FHLB/FHLMC) requires FINRA Firm plan · $1,650/mo</div>`;
   }
 
-  // FRED fallback
-  const f   = DATA?.fred || {};
-  const ust = DATA?.us_treasury || {};
-  const getY = t => { const i=(ust.tenors||[]).indexOf(t); return i>=0&&ust.yields[i]!=null?ust.yields[i]:null; };
+  // Always show UST reference rates below
   const rows = [
-    { label:'SOFR',        val:f.sofr!=null?fmt(f.sofr,2)+'%':'—',         chg1d:f.sofr_chg_1d,    chg1w:f.sofr_chg_1w,    chg1m:f.sofr_chg_1m,    src:'FRED SOFR',  bps:false },
-    { label:'UST 2Y',      val:getY('2Y')!=null?fmt(getY('2Y'),2)+'%':'—', chg1d:null,chg1w:null,chg1m:null, src:'US Treasury', bps:false },
-    { label:'UST 5Y',      val:getY('5Y')!=null?fmt(getY('5Y'),2)+'%':'—', chg1d:null,chg1w:null,chg1m:null, src:'US Treasury', bps:false },
-    { label:'UST 10Y',     val:getY('10Y')!=null?fmt(getY('10Y'),2)+'%':'—',chg1d:null,chg1w:null,chg1m:null,src:'US Treasury', bps:false },
-    { label:'2Y–10Y Sprd', val:f.t10y2y!=null?fmt(f.t10y2y,2)+'%':'—',    chg1d:f.t10y2y_chg_1d, chg1w:f.t10y2y_chg_1w, chg1m:f.t10y2y_chg_1m, src:'FRED T10Y2Y',bps:false },
+    { label:'SOFR',        val:fred.sofr!=null?fmt(fred.sofr,2)+'%':'—',           chg1d:fred.sofr_chg_1d,    chg1w:fred.sofr_chg_1w,    chg1m:fred.sofr_chg_1m,    src:'FRED', bps:false },
+    { label:'UST 2Y',      val:getY('2Y')!=null?fmt(getY('2Y'),2)+'%':'—',         chg1d:null,chg1w:null,chg1m:null, src:'US Tsy', bps:false },
+    { label:'UST 5Y',      val:getY('5Y')!=null?fmt(getY('5Y'),2)+'%':'—',         chg1d:null,chg1w:null,chg1m:null, src:'US Tsy', bps:false },
+    { label:'UST 10Y',     val:getY('10Y')!=null?fmt(getY('10Y'),2)+'%':'—',       chg1d:null,chg1w:null,chg1m:null, src:'US Tsy', bps:false },
+    { label:'2Y–10Y Sprd', val:fred.t10y2y!=null?fmt(fred.t10y2y,2)+'%':'—',      chg1d:fred.t10y2y_chg_1d, chg1w:fred.t10y2y_chg_1w, chg1m:fred.t10y2y_chg_1m, src:'FRED', bps:false },
   ];
-  return `<table class="bond-table"><thead><tr>
-    <th>Indicator</th><th>Value</th><th>1D</th><th>1W</th><th>1M</th><th>Source</th>
-  </tr></thead><tbody>
-  ${rows.map(r=>`<tr>
-    <td class="t-name">${r.label}</td>
-    <td class="t-val">${r.val}</td>
-    ${chgCell(r.chg1d,r.bps)}${chgCell(r.chg1w,r.bps)}${chgCell(r.chg1m,r.bps)}
-    <td style="font-size:9px;color:var(--text3)">${r.src}</td>
-  </tr>`).join('')}
-  </tbody></table>
-  <div style="padding:6px 12px;font-size:9px;color:var(--text3)">⚠ FINRA unavailable — showing FRED yields. Add FINRA_API_KEY + FINRA_CLIENT_SECRET secrets to enable volume data.</div>`;
+  const fredBlock = `
+    <div style="padding:10px 12px 4px;font-size:9px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">Reference Rates</div>
+    <table class="bond-table"><thead><tr>
+      <th>Indicator</th><th>Value</th><th>1D</th><th>1W</th><th>1M</th><th>Src</th>
+    </tr></thead><tbody>
+    ${rows.map(r=>`<tr>
+      <td class="t-name">${r.label}</td>
+      <td class="t-val">${r.val}</td>
+      ${chgCell(r.chg1d,r.bps)}${chgCell(r.chg1w,r.bps)}${chgCell(r.chg1m,r.bps)}
+      <td style="font-size:9px;color:var(--text3)">${r.src}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+
+  return finraBlock + fredBlock;
 }
 
-// ── Corporate 144A: FINRA breadth (IG / HY / Conv) ─────────────
+// ── Corporate 144A: FINRA totals (ALL) + FRED IG/HY spreads ──────
 function buildCorpFREDTable() {
   const finra   = DATA?.finra;
-  const corp144 = finra?.corp144a || finra?.corp;   // prefer 144A, fall back to corp
-  const date    = finra?.date ? `<div style="padding:6px 12px;font-size:9px;color:var(--text3)">Trade date: ${finra.date}</div>` : '';
+  const corp144 = finra?.corp144a;
+  const corp    = finra?.corp;
+  const fred    = DATA?.fred || {};
+  const date    = finra?.date ? `<div style="padding:4px 12px 8px;font-size:9px;color:var(--text3)">Trade date: ${finra.date}</div>` : '';
 
-  if (corp144 && Object.keys(corp144).length > 0) {
-    const ORDER  = ['ALL','INVESTMENT_GRADE','HIGH_YIELD','CONVERTIBLE'];
-    const LABELS = {ALL:'All Corporate', INVESTMENT_GRADE:'Investment Grade',
-                    HIGH_YIELD:'High Yield', CONVERTIBLE:'Convertibles'};
-    const keys   = ORDER.filter(k => corp144[k]);
-    const rows   = keys.map(k => {
-      const d   = corp144[k];
-      const vol = d.dollar_volume_mm != null ? '$' + fmt(d.dollar_volume_mm, 0) + 'M' : '—';
-      const adv = d.advances  != null ? `<span class="t-pos">▲${d.advances}</span>`  : '—';
-      const dec = d.declines  != null ? `<span class="t-neg">▼${d.declines}</span>`  : '—';
-      const unch= d.unchanged != null ? d.unchanged : '—';
-      const hi  = d.highs_52w != null ? d.highs_52w : '—';
-      const lo  = d.lows_52w  != null ? d.lows_52w  : '—';
-      const rowStyle = k === 'ALL' ? 'font-weight:600' : 'padding-left:18px;font-size:10.5px';
+  let finraBlock = '';
+  // Show 144A totals if available, fall back to corp
+  const sources = [];
+  if (corp144?.ALL) sources.push({ label: 'Corp 144A', data: corp144.ALL });
+  if (corp?.ALL)    sources.push({ label: 'Corporate',  data: corp.ALL });
+
+  if (sources.length > 0) {
+    const rows = sources.map(({ label, data: d }) => {
+      const vol  = d.dollar_volume_mm != null ? '$' + fmt(d.dollar_volume_mm, 0) + 'M' : '—';
+      const adv  = d.advances  != null ? d.advances  : '—';
+      const dec  = d.declines  != null ? d.declines  : '—';
+      const unch = d.unchanged != null ? d.unchanged : '—';
+      const total= d.total > 0 ? d.total : '—';
+      const hi   = d.highs_52w != null ? d.highs_52w : '—';
+      const lo   = d.lows_52w  != null ? d.lows_52w  : '—';
+      const pctAdv = d.total > 0 && d.advances != null
+        ? `<span style="font-size:9px;color:var(--text3)"> ${Math.round(d.advances/d.total*100)}%</span>` : '';
+      const pctDec = d.total > 0 && d.declines != null
+        ? `<span style="font-size:9px;color:var(--text3)"> ${Math.round(d.declines/d.total*100)}%</span>` : '';
       return `<tr>
-        <td class="t-name" style="${rowStyle}">${LABELS[k] || k}</td>
+        <td class="t-name" style="font-weight:600">${label}</td>
         <td class="t-val">${vol}</td>
-        <td class="t-val">${adv}</td>
-        <td class="t-val">${dec}</td>
+        <td class="t-val t-pos">${adv}${pctAdv}</td>
+        <td class="t-val t-neg">${dec}${pctDec}</td>
         <td class="t-val">${unch}</td>
+        <td class="t-val" style="color:var(--text3)">${total}</td>
         <td class="t-val">${hi} / ${lo}</td>
       </tr>`;
     }).join('');
-    const src = finra?.corp144a ? 'FINRA TRACE — Rule 144A' : 'FINRA TRACE — Corporate';
-    return date + `<table class="bond-table"><thead><tr>
-      <th>Segment</th><th>$ Volume</th><th>Advances</th><th>Declines</th><th>Unch.</th><th>52W Hi/Lo</th>
+    finraBlock = date + `
+    <div style="padding:10px 12px 4px;font-size:9px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">FINRA TRACE — Corporate Market Breadth</div>
+    <table class="bond-table"><thead><tr>
+      <th>Market</th><th>$ Volume</th><th style="color:var(--green)">Adv</th><th style="color:var(--red)">Dec</th><th>Unch</th><th>Issues</th><th>52W Hi/Lo</th>
     </tr></thead><tbody>${rows}</tbody></table>
-    <div style="padding:6px 12px;font-size:9px;color:var(--text3)">Source: ${src}</div>`;
+    <div style="padding:3px 12px 10px;font-size:9px;color:var(--text3)">IG/HY/Convertibles breakdown requires FINRA Firm plan · $1,650/mo</div>`;
   }
 
-  // FRED spread fallback
-  const f = DATA?.fred || {};
-  if (!f.ig_spread_bps && !f.hy_spread_bps) return noData('FRED spread data not loaded');
-  const rows = [
-    { label:'Investment Grade OAS', val:f.ig_spread_bps!=null?fmtBps(f.ig_spread_bps):'—', chg1d:f.ig_chg_1d, chg1w:f.ig_chg_1w, chg1m:f.ig_chg_1m, src:'ICE BofA IG' },
-    { label:'High Yield OAS',       val:f.hy_spread_bps!=null?fmtBps(f.hy_spread_bps):'—', chg1d:f.hy_chg_1d, chg1w:f.hy_chg_1w, chg1m:f.hy_chg_1m, src:'ICE BofA HY' },
-    { label:'HY minus IG',          val:f.ig_spread_bps!=null&&f.hy_spread_bps!=null?fmtBps(f.hy_spread_bps-f.ig_spread_bps):'—',
-      chg1d:f.ig_chg_1d!=null&&f.hy_chg_1d!=null?f.hy_chg_1d-f.ig_chg_1d:null,
-      chg1w:f.ig_chg_1w!=null&&f.hy_chg_1w!=null?f.hy_chg_1w-f.ig_chg_1w:null,
-      chg1m:f.ig_chg_1m!=null&&f.hy_chg_1m!=null?f.hy_chg_1m-f.ig_chg_1m:null, src:'Spread vs IG' },
-    { label:'SOFR', val:f.sofr!=null?fmt(f.sofr,2)+'%':'—', chg1d:f.sofr_chg_1d, chg1w:f.sofr_chg_1w, chg1m:f.sofr_chg_1m, src:'FRED SOFR' },
+  // Always show FRED OAS spreads
+  if (!fred.ig_spread_bps && !fred.hy_spread_bps) return finraBlock || noData('Data not loaded');
+  const spreadRows = [
+    { label:'IG OAS',    val:fred.ig_spread_bps!=null?fmtBps(fred.ig_spread_bps):'—', chg1d:fred.ig_chg_1d, chg1w:fred.ig_chg_1w, chg1m:fred.ig_chg_1m, src:'ICE BofA IG' },
+    { label:'HY OAS',   val:fred.hy_spread_bps!=null?fmtBps(fred.hy_spread_bps):'—', chg1d:fred.hy_chg_1d, chg1w:fred.hy_chg_1w, chg1m:fred.hy_chg_1m, src:'ICE BofA HY' },
+    { label:'HY–IG',    val:fred.ig_spread_bps!=null&&fred.hy_spread_bps!=null?fmtBps(fred.hy_spread_bps-fred.ig_spread_bps):'—',
+      chg1d:fred.ig_chg_1d!=null&&fred.hy_chg_1d!=null?fred.hy_chg_1d-fred.ig_chg_1d:null,
+      chg1w:fred.ig_chg_1w!=null&&fred.hy_chg_1w!=null?fred.hy_chg_1w-fred.ig_chg_1w:null,
+      chg1m:fred.ig_chg_1m!=null&&fred.hy_chg_1m!=null?fred.hy_chg_1m-fred.ig_chg_1m:null, src:'Spread' },
+    { label:'SOFR',     val:fred.sofr!=null?fmt(fred.sofr,2)+'%':'—', chg1d:fred.sofr_chg_1d, chg1w:fred.sofr_chg_1w, chg1m:fred.sofr_chg_1m, src:'FRED SOFR' },
   ];
-  return `<table class="bond-table"><thead><tr>
-    <th>Segment</th><th>Spread</th><th>1D</th><th>1W</th><th>1M</th><th>Index</th>
-  </tr></thead><tbody>
-  ${rows.map(r=>`<tr>
-    <td class="t-name">${r.label}</td>
-    <td class="t-val">${r.val}</td>
-    ${chgCell(r.chg1d)}${chgCell(r.chg1w)}${chgCell(r.chg1m)}
-    <td style="font-size:9px;color:var(--text3)">${r.src}</td>
-  </tr>`).join('')}
-  </tbody></table>
-  <div style="padding:6px 12px;font-size:9px;color:var(--text3)">⚠ FINRA unavailable — showing ICE BofA spreads via FRED.</div>`;
+  const fredBlock = `
+    <div style="padding:10px 12px 4px;font-size:9px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">Credit Spreads — ICE BofA via FRED</div>
+    <table class="bond-table"><thead><tr>
+      <th>Segment</th><th>Spread</th><th>1D</th><th>1W</th><th>1M</th><th>Index</th>
+    </tr></thead><tbody>
+    ${spreadRows.map(r=>`<tr>
+      <td class="t-name">${r.label}</td>
+      <td class="t-val">${r.val}</td>
+      ${chgCell(r.chg1d)}${chgCell(r.chg1w)}${chgCell(r.chg1m)}
+      <td style="font-size:9px;color:var(--text3)">${r.src}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+
+  return finraBlock + fredBlock;
 }
 
 function buildFREDCreditTable() {
