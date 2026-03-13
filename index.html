@@ -19,7 +19,7 @@
   body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;font-size:12px;line-height:1.5;min-height:100vh;overflow-x:hidden;}
   body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");opacity:0.4;}
   body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:998;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);}
- 
+
   /* ── HEADER ── */
   header{border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;background:rgba(8,12,16,0.97);backdrop-filter:blur(12px);}
   .header-top{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px;}
@@ -37,7 +37,7 @@
   .nav-btn{padding:10px 16px;background:none;border:none;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.08em;color:var(--text3);border-bottom:2px solid transparent;text-transform:uppercase;transition:all 0.15s;white-space:nowrap;}
   .nav-btn:hover{color:var(--text);}
   .nav-btn.active{color:var(--amber);border-bottom-color:var(--amber);}
- 
+
   /* ── TICKER ── */
   .ticker-strip{background:var(--bg3);border-bottom:1px solid var(--border);overflow:hidden;height:34px;display:flex;align-items:center;}
   .ticker-scroll{display:flex;gap:0;animation:tickerScroll 40s linear infinite;white-space:nowrap;}
@@ -46,7 +46,7 @@
   .ticker-name{color:var(--text2);font-size:11px;}
   .ticker-val{color:var(--heading);font-size:11px;font-weight:700;}
   .ticker-chg{font-size:10px;}
- 
+
   /* ── LAYOUT ── */
   .main{padding:20px 24px;max-width:1800px;margin:0 auto;}
   .section-label{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:10px;}
@@ -56,7 +56,7 @@
   .section{margin-bottom:28px;}
   .page-section{display:none;}
   .page-section.active{display:block;}
- 
+
   /* ── PANELS ── */
   .panel{background:var(--bg2);border:1px solid var(--border);border-radius:6px;overflow:hidden;}
   .panel-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg3);}
@@ -65,14 +65,14 @@
   .panel-body{padding:0;}
   .chart-wrap{padding:16px;position:relative;}
   .chart-wrap canvas{display:block;}
- 
+
   /* ── STAT CARDS ── */
   .stat-card{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:4px;position:relative;}
   .stat-label{font-size:9px;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;}
   .stat-val{font-family:'Bebas Neue',sans-serif;font-size:42px;letter-spacing:0.06em;color:var(--heading);line-height:1;margin:3px 0;}
   .stat-chg{font-size:11px;font-family:'DM Mono',monospace;font-weight:500;}
   .stat-source{font-size:8px;color:var(--text3);margin-top:2px;letter-spacing:0.05em;}
- 
+
   /* ── TABLES ── */
   .bond-table{width:100%;border-collapse:collapse;}
   .bond-table thead tr{background:var(--bg4);}
@@ -91,19 +91,19 @@
   .badge{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;}
   .badge-up{background:rgba(63,185,80,0.15);color:var(--green);}
   .badge-down{background:rgba(248,81,73,0.15);color:var(--red);}
- 
+
   /* ── TABS ── */
   .tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--bg3);}
   .tab{padding:8px 14px;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;font-family:'Space Mono',monospace;transition:all 0.15s;}
   .tab:hover{color:var(--text);}
   .tab.active{color:var(--cyan);border-bottom-color:var(--cyan);}
- 
+
   /* ── YIELD CURVE CONTROLS ── */
   .yield-controls{display:flex;gap:8px;padding:12px 14px;flex-wrap:wrap;border-bottom:1px solid var(--border);background:var(--bg3);}
   .geo-btn{padding:4px 10px;border-radius:3px;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;border:1px solid var(--border2);background:none;font-family:'Space Mono',monospace;color:var(--text2);transition:all 0.15s;}
   .geo-btn:hover{border-color:var(--text2);color:var(--text);}
   .geo-btn.active{border-color:var(--amber);color:var(--amber);background:var(--glow-a);}
- 
+
   /* ── HEATMAP ── */
   .heatmap-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;padding:16px;}
   .heatmap-header{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;padding:0 16px;margin-bottom:4px;}
@@ -116,16 +116,16 @@
   .hm-legend{display:flex;gap:16px;padding:8px 16px 14px;flex-wrap:wrap;}
   .legend-item{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--text2);}
   .legend-dot{width:8px;height:8px;border-radius:2px;}
- 
+
   /* ── GOV CONTROLS ── */
   .gov-controls{display:flex;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);background:var(--bg3);flex-wrap:wrap;align-items:center;}
   .gov-check{display:flex;align-items:center;gap:5px;font-size:10px;cursor:pointer;user-select:none;}
   .check-dot{width:10px;height:10px;border-radius:2px;}
- 
+
   /* ── HM TOOLTIP ── */
   .hm-tooltip{position:fixed;background:var(--bg4);border:1px solid var(--border2);border-radius:5px;padding:8px 12px;pointer-events:none;z-index:500;font-size:10px;color:var(--text);display:none;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
   .hm-tooltip strong{color:var(--heading);display:block;margin-bottom:2px;}
- 
+
   /* ── INFO BUTTON ── */
   .info-wrap{position:relative;display:inline-flex;align-items:center;z-index:10;}
   .info-btn{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:rgba(88,166,255,0.10);border:1px solid rgba(88,166,255,0.28);color:var(--blue);font-size:9px;font-family:'Syne',sans-serif;font-weight:800;cursor:help;transition:all 0.15s;flex-shrink:0;user-select:none;line-height:1;}
@@ -143,7 +143,7 @@
   .info-popup p{color:var(--text2);margin-bottom:5px;}
   .info-popup p:last-child{margin-bottom:0;}
   .info-popup b{color:var(--amber);}
- 
+
   /* ── EMPTY / LOADING STATES ── */
   .loading-overlay{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;gap:12px;color:var(--text3);}
   .loading-spinner{width:24px;height:24px;border:2px solid var(--border2);border-top-color:var(--amber);border-radius:50%;animation:spin 0.8s linear infinite;}
@@ -153,16 +153,16 @@
   .err-banner{background:rgba(248,81,73,0.08);border:1px solid rgba(248,81,73,0.2);border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:11px;color:var(--red);display:flex;align-items:flex-start;gap:10px;}
   .warn-banner{background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.2);border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:11px;color:var(--amber);display:flex;align-items:flex-start;gap:10px;}
   .source-tag{display:inline-block;padding:1px 6px;border-radius:3px;background:rgba(88,166,255,0.1);color:var(--blue);font-size:8px;letter-spacing:0.05em;margin-left:6px;}
- 
+
   .fade-in{animation:fadeIn 0.4s ease forwards;}
   @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
- 
+
   @media(max-width:1200px){.grid-4{grid-template-columns:1fr 1fr;}}
   @media(max-width:800px){.grid-2,.grid-4{grid-template-columns:1fr;}.heatmap-grid{grid-template-columns:repeat(5,1fr);}}
 </style>
 </head>
 <body>
- 
+
 <header>
   <div class="header-top">
     <div class="logo">Fixed Income Terminal <span>/ Global Bond Market</span></div>
@@ -183,20 +183,20 @@
     <button class="nav-btn" onclick="showSection('govbonds',this)">Gov Bonds</button>
   </nav>
 </header>
- 
+
 <div class="ticker-strip"><div class="ticker-scroll" id="ticker-scroll">
   <div class="ticker-item"><span class="ticker-name">Loading market data…</span></div>
 </div></div>
- 
+
 <div class="hm-tooltip" id="hm-tooltip"></div>
- 
+
 <div class="main" id="main-content">
   <div class="loading-overlay" id="global-loading">
     <div class="loading-spinner"></div>
     <span>Fetching live bond market data…</span>
   </div>
 </div>
- 
+
 <script>
 /* ══════════════════════════════════════
    STATE
@@ -205,21 +205,21 @@ let DATA = null;          // bonds.json content
 let currentSection = 'us';
 let yieldChart = null, spreadChartInst = null, govChart = null, oiChartInst = null;
 let activeYieldGeos = [];
- 
+
 const $ = id => document.getElementById(id);
 const fmt = (v, d=2) => (v != null ? Number(v).toFixed(d) : '—');
 const fmtBps = v => v != null ? Math.round(v) + ' bps' : '—';
 const na = () => `<span class="t-neu">—</span>`;
- 
+
 Chart.defaults.color = '#8b949e';
 Chart.defaults.borderColor = '#1e2d3d';
 Chart.defaults.font.family = "'DM Mono', monospace";
 Chart.defaults.font.size = 10;
- 
+
 /* ── CLOCK ── */
 function updateClock(){$('live-time').textContent=new Date().toUTCString().split(' ')[4]+' UTC';}
 setInterval(updateClock,1000); updateClock();
- 
+
 /* ── SMART POPUP POSITION ── */
 document.addEventListener('mouseenter', e => {
   const w = e.target.closest && e.target.closest('.info-wrap');
@@ -231,7 +231,7 @@ document.addEventListener('mouseenter', e => {
   if (r.left < 220) p.classList.add('pop-left');
   else if (window.innerWidth - r.right < 300) p.classList.add('pop-right');
 }, true);
- 
+
 /* ══════════════════════════════════════
    DATA LOADING
 ══════════════════════════════════════ */
@@ -272,7 +272,7 @@ async function loadData() {
       </div>`;
   }
 }
- 
+
 /* ══════════════════════════════════════
    RENDER ALL
 ══════════════════════════════════════ */
@@ -282,7 +282,7 @@ function renderAll() {
   // Reinit charts for current section
   setTimeout(() => initChartsForSection(currentSection), 60);
 }
- 
+
 function buildHTML() {
   return `
     ${buildErrorBanners()}
@@ -446,7 +446,7 @@ function buildHTML() {
       </div>
     </div>`;
 }
- 
+
 /* ── HTML HELPERS ── */
 function infoBtn(info, pos='pop-left') {
   return `<span class="info-wrap"><span class="info-btn">i</span><div class="info-popup ${pos}"><strong>${info.title}</strong>${info.body}</div></span>`;
@@ -473,7 +473,7 @@ function buildErrorBanners() {
     Check GitHub Secrets (FRED_API_KEY, FINRA_API_KEY) and re-run the workflow.
   </div></div>`;
 }
- 
+
 /* ══════════════════════════════════════
    US SECTION BUILDERS
 ══════════════════════════════════════ */
@@ -481,13 +481,13 @@ function buildUSKPIs() {
   const fred = DATA?.fred || {};
   const ust  = DATA?.us_treasury || {};
   const finra = DATA?.finra || {};
- 
+
   // Find 10Y yield
   const t10idx = (ust.tenors || []).indexOf('10Y');
   const y10 = t10idx >= 0 ? ust.yields[t10idx] : null;
   const t2idx = (ust.tenors || []).indexOf('2Y');
   const y2 = t2idx >= 0 ? ust.yields[t2idx] : null;
- 
+
   const cards = [
     { label:'UST 10Y Yield',    val: y10 != null ? fmt(y10,2)+'%' : '—', chg: fred.t10y2y != null ? (fred.t10y2y > 0 ? '▲' : '▼') + fmt(Math.abs(fred.t10y2y),2)+'% 2Y-10Y spread' : '', src:'US Treasury', pos: y10 != null },
     { label:'IG OAS Spread',    val: fred.ig_spread_bps != null ? fmtBps(fred.ig_spread_bps) : '—', chg: fred.ig_date || '', src:'FRED BAMLC0A0CM', pos: true },
@@ -501,7 +501,7 @@ function buildUSKPIs() {
     <div class="stat-source">${c.src}</div>
   </div>`).join('');
 }
- 
+
 function buildFinraAgencyTable() {
   const f = DATA?.finra;
   if (!f || !f.agency || !Object.keys(f.agency).length) return noData('FINRA API key required — see README');
@@ -520,7 +520,7 @@ function buildFinraAgencyTable() {
     ${buildIssuerRows(f.agency_issuers || {})}
   </tbody></table>`;
 }
- 
+
 function buildIssuerRows(issuers) {
   if (!Object.keys(issuers).length) return '';
   return Object.entries(issuers).slice(0,6).map(([name, vol]) =>
@@ -529,7 +529,7 @@ function buildIssuerRows(issuers) {
      <td colspan="3"></td></tr>`
   ).join('');
 }
- 
+
 function buildFinraTradeTable() {
   const f = DATA?.finra;
   if (!f || !f.agency) return noData('FINRA API key required — see README');
@@ -552,7 +552,7 @@ function buildFinraTradeTable() {
   html += '</tbody></table>';
   return html;
 }
- 
+
 function buildCorpTable() {
   const f = DATA?.finra;
   if (!f) return noData('FINRA API key required');
@@ -572,9 +572,9 @@ function buildCorpTable() {
     </tr>
   </tbody></table>`;
 }
- 
+
 function buildCorpTradeTable() { return buildFinraTradeTable(); }
- 
+
 /* ══════════════════════════════════════
    EU SECTION
 ══════════════════════════════════════ */
@@ -597,7 +597,7 @@ function buildEUKPIs() {
     <div class="stat-source">${c.src}</div>
   </div>`).join('');
 }
- 
+
 function buildECBTable() {
   const ecb = DATA?.ecb;
   if (!ecb || !ecb.tenors || !ecb.tenors.length) return noData('ECB data not loaded');
@@ -610,9 +610,9 @@ function buildECBTable() {
   </tr>`).join('')}
   </tbody></table>`;
 }
- 
+
 /* ══════════════════════════════════════
-   US CREDIT (FRED) — replaces FINRA panels
+   US CREDIT — FINRA Market Breadth + FRED fallback
 ══════════════════════════════════════ */
 function chgCell(v, isBps=true) {
   if (v == null) return '<td class="t-val" style="color:var(--text3)">—</td>';
@@ -621,43 +621,55 @@ function chgCell(v, isBps=true) {
   const label = isBps ? `${sign}${v.toFixed(1)} bps` : `${sign}${v.toFixed(2)}%`;
   return `<td class="t-val ${cls}">${label}</td>`;
 }
- 
+
+// ── Agency: FINRA breadth (FNMA / FHLB / FHLMC) ─────────────────
 function buildAgencyFREDTable() {
+  const finra  = DATA?.finra;
+  const agency = finra?.agency;
+  const date   = finra?.date ? `<div style="padding:6px 12px;font-size:9px;color:var(--text3)">Trade date: ${finra.date}</div>` : '';
+
+  // If we have real FINRA data, render full breakdown
+  if (agency && Object.keys(agency).length > 0) {
+    // Display order: All, then key issuers
+    const ORDER  = ['ALL','FNMA','FHLB','FHLMC','GNMA','FFCB','TVA','OTHER'];
+    const LABELS = {ALL:'All Agency', FNMA:'Fannie Mae (FNMA)', FHLB:'FHLB',
+                    FHLMC:'Freddie Mac (FHLMC)', GNMA:'Ginnie Mae (GNMA)',
+                    FFCB:'Farm Credit (FFCB)', TVA:'TVA', OTHER:'Other'};
+    const keys   = ORDER.filter(k => agency[k]);
+    const rows   = keys.map(k => {
+      const d   = agency[k];
+      const vol = d.dollar_volume_mm != null ? '$' + fmt(d.dollar_volume_mm, 0) + 'M' : '—';
+      const adv = d.advances  != null ? `<span class="t-pos">▲${d.advances}</span>`  : '—';
+      const dec = d.declines  != null ? `<span class="t-neg">▼${d.declines}</span>`  : '—';
+      const unch= d.unchanged != null ? d.unchanged : '—';
+      const hi  = d.highs_52w != null ? d.highs_52w : '—';
+      const lo  = d.lows_52w  != null ? d.lows_52w  : '—';
+      const rowStyle = k === 'ALL' ? 'font-weight:600' : 'padding-left:18px;font-size:10.5px';
+      return `<tr>
+        <td class="t-name" style="${rowStyle}">${LABELS[k] || k}</td>
+        <td class="t-val">${vol}</td>
+        <td class="t-val">${adv}</td>
+        <td class="t-val">${dec}</td>
+        <td class="t-val">${unch}</td>
+        <td class="t-val">${hi} / ${lo}</td>
+      </tr>`;
+    }).join('');
+    return date + `<table class="bond-table"><thead><tr>
+      <th>Issuer</th><th>$ Volume</th><th>Advances</th><th>Declines</th><th>Unch.</th><th>52W Hi/Lo</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    <div style="padding:6px 12px;font-size:9px;color:var(--text3)">Source: FINRA TRACE Market Breadth</div>`;
+  }
+
+  // FRED fallback
   const f   = DATA?.fred || {};
   const ust = DATA?.us_treasury || {};
   const getY = t => { const i=(ust.tenors||[]).indexOf(t); return i>=0&&ust.yields[i]!=null?ust.yields[i]:null; };
- 
   const rows = [
-    {
-      label: 'SOFR',
-      val:   f.sofr!=null ? fmt(f.sofr,2)+'%' : '—',
-      chg1d: f.sofr_chg_1d, chg1w: f.sofr_chg_1w, chg1m: f.sofr_chg_1m,
-      src:   'FRED SOFR', bps: false,
-    },
-    {
-      label: 'UST 2Y',
-      val:   getY('2Y')!=null ? fmt(getY('2Y'),2)+'%' : '—',
-      chg1d: null, chg1w: null, chg1m: null,
-      src:   'US Treasury', bps: false,
-    },
-    {
-      label: 'UST 5Y',
-      val:   getY('5Y')!=null ? fmt(getY('5Y'),2)+'%' : '—',
-      chg1d: null, chg1w: null, chg1m: null,
-      src:   'US Treasury', bps: false,
-    },
-    {
-      label: 'UST 10Y',
-      val:   getY('10Y')!=null ? fmt(getY('10Y'),2)+'%' : '—',
-      chg1d: null, chg1w: null, chg1m: null,
-      src:   'US Treasury', bps: false,
-    },
-    {
-      label: '2Y–10Y Spread',
-      val:   f.t10y2y!=null ? fmt(f.t10y2y,2)+'%' : '—',
-      chg1d: f.t10y2y_chg_1d, chg1w: f.t10y2y_chg_1w, chg1m: f.t10y2y_chg_1m,
-      src:   'FRED T10Y2Y', bps: false,
-    },
+    { label:'SOFR',        val:f.sofr!=null?fmt(f.sofr,2)+'%':'—',         chg1d:f.sofr_chg_1d,    chg1w:f.sofr_chg_1w,    chg1m:f.sofr_chg_1m,    src:'FRED SOFR',  bps:false },
+    { label:'UST 2Y',      val:getY('2Y')!=null?fmt(getY('2Y'),2)+'%':'—', chg1d:null,chg1w:null,chg1m:null, src:'US Treasury', bps:false },
+    { label:'UST 5Y',      val:getY('5Y')!=null?fmt(getY('5Y'),2)+'%':'—', chg1d:null,chg1w:null,chg1m:null, src:'US Treasury', bps:false },
+    { label:'UST 10Y',     val:getY('10Y')!=null?fmt(getY('10Y'),2)+'%':'—',chg1d:null,chg1w:null,chg1m:null,src:'US Treasury', bps:false },
+    { label:'2Y–10Y Sprd', val:f.t10y2y!=null?fmt(f.t10y2y,2)+'%':'—',    chg1d:f.t10y2y_chg_1d, chg1w:f.t10y2y_chg_1w, chg1m:f.t10y2y_chg_1m, src:'FRED T10Y2Y',bps:false },
   ];
   return `<table class="bond-table"><thead><tr>
     <th>Indicator</th><th>Value</th><th>1D</th><th>1W</th><th>1M</th><th>Source</th>
@@ -665,43 +677,60 @@ function buildAgencyFREDTable() {
   ${rows.map(r=>`<tr>
     <td class="t-name">${r.label}</td>
     <td class="t-val">${r.val}</td>
-    ${chgCell(r.chg1d, r.bps)}${chgCell(r.chg1w, r.bps)}${chgCell(r.chg1m, r.bps)}
+    ${chgCell(r.chg1d,r.bps)}${chgCell(r.chg1w,r.bps)}${chgCell(r.chg1m,r.bps)}
     <td style="font-size:9px;color:var(--text3)">${r.src}</td>
   </tr>`).join('')}
   </tbody></table>
-  <div style="padding:6px 12px;font-size:9px;color:var(--text3)">⚠ Buy/Sell volumes (FNMA, FHLB, GNMA) nécessitent FINRA Firm plan.</div>`;
+  <div style="padding:6px 12px;font-size:9px;color:var(--text3)">⚠ FINRA unavailable — showing FRED yields. Add FINRA_API_KEY + FINRA_CLIENT_SECRET secrets to enable volume data.</div>`;
 }
- 
+
+// ── Corporate 144A: FINRA breadth (IG / HY / Conv) ─────────────
 function buildCorpFREDTable() {
+  const finra   = DATA?.finra;
+  const corp144 = finra?.corp144a || finra?.corp;   // prefer 144A, fall back to corp
+  const date    = finra?.date ? `<div style="padding:6px 12px;font-size:9px;color:var(--text3)">Trade date: ${finra.date}</div>` : '';
+
+  if (corp144 && Object.keys(corp144).length > 0) {
+    const ORDER  = ['ALL','INVESTMENT_GRADE','HIGH_YIELD','CONVERTIBLE'];
+    const LABELS = {ALL:'All Corporate', INVESTMENT_GRADE:'Investment Grade',
+                    HIGH_YIELD:'High Yield', CONVERTIBLE:'Convertibles'};
+    const keys   = ORDER.filter(k => corp144[k]);
+    const rows   = keys.map(k => {
+      const d   = corp144[k];
+      const vol = d.dollar_volume_mm != null ? '$' + fmt(d.dollar_volume_mm, 0) + 'M' : '—';
+      const adv = d.advances  != null ? `<span class="t-pos">▲${d.advances}</span>`  : '—';
+      const dec = d.declines  != null ? `<span class="t-neg">▼${d.declines}</span>`  : '—';
+      const unch= d.unchanged != null ? d.unchanged : '—';
+      const hi  = d.highs_52w != null ? d.highs_52w : '—';
+      const lo  = d.lows_52w  != null ? d.lows_52w  : '—';
+      const rowStyle = k === 'ALL' ? 'font-weight:600' : 'padding-left:18px;font-size:10.5px';
+      return `<tr>
+        <td class="t-name" style="${rowStyle}">${LABELS[k] || k}</td>
+        <td class="t-val">${vol}</td>
+        <td class="t-val">${adv}</td>
+        <td class="t-val">${dec}</td>
+        <td class="t-val">${unch}</td>
+        <td class="t-val">${hi} / ${lo}</td>
+      </tr>`;
+    }).join('');
+    const src = finra?.corp144a ? 'FINRA TRACE — Rule 144A' : 'FINRA TRACE — Corporate';
+    return date + `<table class="bond-table"><thead><tr>
+      <th>Segment</th><th>$ Volume</th><th>Advances</th><th>Declines</th><th>Unch.</th><th>52W Hi/Lo</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    <div style="padding:6px 12px;font-size:9px;color:var(--text3)">Source: ${src}</div>`;
+  }
+
+  // FRED spread fallback
   const f = DATA?.fred || {};
   if (!f.ig_spread_bps && !f.hy_spread_bps) return noData('FRED spread data not loaded');
   const rows = [
-    {
-      label: 'Investment Grade OAS',
-      val:   f.ig_spread_bps!=null ? fmtBps(f.ig_spread_bps) : '—',
-      chg1d: f.ig_chg_1d, chg1w: f.ig_chg_1w, chg1m: f.ig_chg_1m,
-      src:   'ICE BofA IG',
-    },
-    {
-      label: 'High Yield OAS',
-      val:   f.hy_spread_bps!=null ? fmtBps(f.hy_spread_bps) : '—',
-      chg1d: f.hy_chg_1d, chg1w: f.hy_chg_1w, chg1m: f.hy_chg_1m,
-      src:   'ICE BofA HY',
-    },
-    {
-      label: 'HY minus IG',
-      val:   f.ig_spread_bps!=null&&f.hy_spread_bps!=null ? fmtBps(f.hy_spread_bps-f.ig_spread_bps) : '—',
-      chg1d: f.ig_chg_1d!=null&&f.hy_chg_1d!=null ? f.hy_chg_1d-f.ig_chg_1d : null,
-      chg1w: f.ig_chg_1w!=null&&f.hy_chg_1w!=null ? f.hy_chg_1w-f.ig_chg_1w : null,
-      chg1m: f.ig_chg_1m!=null&&f.hy_chg_1m!=null ? f.hy_chg_1m-f.ig_chg_1m : null,
-      src:   'Spread vs IG',
-    },
-    {
-      label: 'SOFR',
-      val:   f.sofr!=null ? fmt(f.sofr,2)+'%' : '—',
-      chg1d: f.sofr_chg_1d, chg1w: f.sofr_chg_1w, chg1m: f.sofr_chg_1m,
-      src:   'FRED SOFR',
-    },
+    { label:'Investment Grade OAS', val:f.ig_spread_bps!=null?fmtBps(f.ig_spread_bps):'—', chg1d:f.ig_chg_1d, chg1w:f.ig_chg_1w, chg1m:f.ig_chg_1m, src:'ICE BofA IG' },
+    { label:'High Yield OAS',       val:f.hy_spread_bps!=null?fmtBps(f.hy_spread_bps):'—', chg1d:f.hy_chg_1d, chg1w:f.hy_chg_1w, chg1m:f.hy_chg_1m, src:'ICE BofA HY' },
+    { label:'HY minus IG',          val:f.ig_spread_bps!=null&&f.hy_spread_bps!=null?fmtBps(f.hy_spread_bps-f.ig_spread_bps):'—',
+      chg1d:f.ig_chg_1d!=null&&f.hy_chg_1d!=null?f.hy_chg_1d-f.ig_chg_1d:null,
+      chg1w:f.ig_chg_1w!=null&&f.hy_chg_1w!=null?f.hy_chg_1w-f.ig_chg_1w:null,
+      chg1m:f.ig_chg_1m!=null&&f.hy_chg_1m!=null?f.hy_chg_1m-f.ig_chg_1m:null, src:'Spread vs IG' },
+    { label:'SOFR', val:f.sofr!=null?fmt(f.sofr,2)+'%':'—', chg1d:f.sofr_chg_1d, chg1w:f.sofr_chg_1w, chg1m:f.sofr_chg_1m, src:'FRED SOFR' },
   ];
   return `<table class="bond-table"><thead><tr>
     <th>Segment</th><th>Spread</th><th>1D</th><th>1W</th><th>1M</th><th>Index</th>
@@ -712,9 +741,10 @@ function buildCorpFREDTable() {
     ${chgCell(r.chg1d)}${chgCell(r.chg1w)}${chgCell(r.chg1m)}
     <td style="font-size:9px;color:var(--text3)">${r.src}</td>
   </tr>`).join('')}
-  </tbody></table>`;
+  </tbody></table>
+  <div style="padding:6px 12px;font-size:9px;color:var(--text3)">⚠ FINRA unavailable — showing ICE BofA spreads via FRED.</div>`;
 }
- 
+
 function buildFREDCreditTable() {
   const f = DATA?.fred || {};
   if (!f.ig_spread_bps && !f.hy_spread_bps) return noData('FRED spread data not loaded');
@@ -734,7 +764,7 @@ function buildFREDCreditTable() {
   </tr>`).join('')}
   </tbody></table>`;
 }
- 
+
 function buildFREDCreditNote() {
   const f = DATA?.fred || {};
   const hist = f.spread_history || [];
@@ -750,7 +780,7 @@ function buildFREDCreditNote() {
     Full history visible in the Yield Curves section → Spread Evolution chart.</div>
   </div>`;
 }
- 
+
 function buildEURIBORPanel() {
   const ecb = DATA?.ecb || {};
   if (!ecb.tenors || !ecb.tenors.length) return noData('ECB data not loaded');
@@ -777,7 +807,7 @@ function buildEURIBORPanel() {
   </tr>
   </tbody></table>`;
 }
- 
+
 function buildBOJKeyTenors() {
   const boj = DATA?.boj;
   if (!boj || !boj.tenors || !boj.tenors.length) return noData('BOJ data not loaded');
@@ -796,7 +826,7 @@ function buildBOJKeyTenors() {
   <tr><td class="t-name">10s30s</td><td class="t-val">${s10_30}</td></tr>
   </tbody></table>`;
 }
- 
+
 /* ══════════════════════════════════════
    CN SECTION
 ══════════════════════════════════════ */
@@ -817,7 +847,7 @@ function buildCNKPIs() {
     <div class="stat-source">${c.src}</div>
   </div>`).join('');
 }
- 
+
 function buildChinaTable() {
   const cn = DATA?.china;
   if (!cn) return noData('China data not loaded');
@@ -848,7 +878,7 @@ function buildChinaTable() {
   html += '</div>';
   return html;
 }
- 
+
 function buildChinaSourcesCard() {
   return `<div style="padding:14px;font-size:10px;line-height:1.8;color:var(--text2)">
     <b style="color:var(--heading);display:block;margin-bottom:8px">Active China Data Sources</b>
@@ -862,7 +892,7 @@ function buildChinaSourcesCard() {
     ⚠ Full CGB yield curve via ADB may require the server-side Python fetcher to run — CORS prevents browser-side fetch from these sources.</div>
   </div>`;
 }
- 
+
 /* ══════════════════════════════════════
    JP SECTION
 ══════════════════════════════════════ */
@@ -883,7 +913,7 @@ function buildJPKPIs() {
     <div class="stat-source">${c.src}</div>
   </div>`).join('');
 }
- 
+
 function buildBOJTable() {
   const boj = DATA?.boj;
   if (!boj || !boj.tenors || !boj.tenors.length) return noData('BOJ data not loaded');
@@ -896,7 +926,7 @@ function buildBOJTable() {
   </tr>`).join('')}
   </tbody></table>`;
 }
- 
+
 /* ══════════════════════════════════════
    TICKER — live yields
 ══════════════════════════════════════ */
@@ -925,13 +955,13 @@ function renderTicker() {
   </div>`).join('');
   ts.innerHTML = html + html;
 }
- 
+
 /* ══════════════════════════════════════
    CHARTS
 ══════════════════════════════════════ */
 const CC = {US:'#f5a623',EU:'#58a6ff',Japan:'#3fb950',UK:'#bc8cff',Germany:'#39c5cf'};
 const GOV_TENORS_LABELS = ['3M','1Y','2Y','5Y','10Y','20Y','30Y'];
- 
+
 function buildGovDatasets() {
   const ust = DATA?.us_treasury || {};
   const ecb = DATA?.ecb || {};
@@ -968,9 +998,9 @@ function buildGovDatasets() {
   }
   return datasets;
 }
- 
+
 let govDatasets = [];
- 
+
 function renderGovControls() {
   const c = $('gov-controls'); if(!c) return;
   c.innerHTML = govDatasets.map(co=>`
@@ -992,7 +1022,7 @@ function updateGovChart() {
   }));
   govChart.update('active');
 }
- 
+
 function initGovChart() {
   const ctx = $('govBondsChart'); if(!ctx||govChart) return;
   govDatasets = buildGovDatasets();
@@ -1003,7 +1033,7 @@ function initGovChart() {
   renderGovControls(); updateGovChart();
   renderSpreadMatrix();
 }
- 
+
 function renderSpreadMatrix() {
   const t = $('spread-matrix-table'); if(!t) return;
   const usData = govDatasets.find(d=>d.key==='US');
@@ -1021,7 +1051,7 @@ function renderSpreadMatrix() {
   });
   t.innerHTML = html + '</tbody>';
 }
- 
+
 function buildYieldCurveDatasets() {
   const sets = [];
   const ust = DATA?.us_treasury;
@@ -1041,7 +1071,7 @@ function buildYieldCurveDatasets() {
   }
   return sets;
 }
- 
+
 function renderYieldControls() {
   const c = $('yield-geo-controls'); if(!c) return;
   const available = [];
@@ -1056,7 +1086,7 @@ function toggleYieldGeo(g) {
   // just refresh
   if(yieldChart){yieldChart.data.datasets=yieldChart.data.datasets;yieldChart.update();}
 }
- 
+
 function initYieldCurveChart() {
   const ctx = $('yieldCurveChart'); if(!ctx||yieldChart) return;
   const datasets = buildYieldCurveDatasets();
@@ -1066,7 +1096,7 @@ function initYieldCurveChart() {
       scales:{x:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e'}},y:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e',callback:v=>v.toFixed(2)+'%'},title:{display:true,text:'Yield (%)',color:'#4a5568'}}}}});
   renderYieldControls();
 }
- 
+
 function initSpreadChart() {
   const ctx = $('spreadChart'); if(!ctx||spreadChartInst) return;
   const fred = DATA?.fred;
@@ -1081,7 +1111,7 @@ function initSpreadChart() {
       plugins:{legend:{position:'top',labels:{boxWidth:12}},tooltip:{backgroundColor:'#1a2333',borderColor:'#243447',borderWidth:1}},
       scales:{x:{grid:{color:'#1e2d3d'},ticks:{maxTicksLimit:12,color:'#8b949e'}},y:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e',callback:v=>v.toFixed(2)+'%'},title:{display:true,text:'Spread (%)',color:'#4a5568'}}}}});
 }
- 
+
 /* Derivatives — heatmap (illustrative roll structure — no free real-time source exists) */
 const FUTURES_TENORS=['2Y','3Y','5Y','7Y','10Y','20Y','30Y','Ultra T','Bund','JGB'];
 const CONTRACT_MONTHS=['Mar25','Jun25','Sep25','Dec25','Mar26','Jun26','Sep26','Dec26','Mar27','Jun27'];
@@ -1122,7 +1152,7 @@ function initOIChart(){
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:10}},tooltip:{backgroundColor:'#1a2333',borderColor:'#243447',borderWidth:1}},scales:{x:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e'}},y:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e'},title:{display:true,text:'000s contracts',color:'#4a5568'}}}}});
 }
 function switchFuturesTab(type,btn){document.querySelectorAll('.tab-bar .tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');renderHeatmap(type);}
- 
+
 /* ── SECTION NAV ── */
 function showSection(id, btn) {
   currentSection = id;
@@ -1138,7 +1168,7 @@ function initChartsForSection(sec){
   else if(sec==='derivatives'){renderHeatmap('ust');renderVolSurface();initOIChart();}
   else if(sec==='govbonds'){initGovChart();}
 }
- 
+
 /* ══════════════════════════════════════
    INFO TEXTS
 ══════════════════════════════════════ */
@@ -1157,7 +1187,7 @@ const INFO = {
   govMulti:  {title:'Multi-Country Curves',body:'<p>Superimposing sovereign curves allows comparison of monetary policy stance, term premium, and credit quality.</p><p>Spread compression between 10Y yields (e.g., BTP vs Bund) is the key barometer of eurozone stress.</p>'},
   spreadMatrix:{title:'Sovereign Spread Matrix',body:'<p>Yield premium vs UST 10Y. <b style="color:var(--green)">Negative</b> = country yields less than US (Germany, Japan). <b style="color:var(--red)">Positive</b> = yield premium reflects credit/inflation/currency risk. 1W Δ shows weekly change in bps.</p>'},
 };
- 
+
 /* ══════════════════════════════════════
    INIT
 ══════════════════════════════════════ */
@@ -1165,4 +1195,3 @@ loadData();
 </script>
 </body>
 </html>
- 
