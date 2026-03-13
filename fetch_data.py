@@ -245,19 +245,30 @@ def _finra_query(endpoint, limit=500):
 def _parse_breadth(records):
     """Convert FINRA market breadth list → dict keyed by subProduct."""
     out, latest = {}, ""
+    # Print first record keys for debugging
+    if records:
+        print(f"    FINRA record fields: {list(records[0].keys())}")
+    DATE_FIELDS = ["tradeDate", "weekEndingDate", "asOfDate", "date", "reportDate",
+                   "weekEndDate", "weekBeginDate", "startDate"]
     for rec in records:
-        sub  = rec.get("subProduct", "ALL")
-        date = rec.get("tradeDate", "")
+        sub  = rec.get("subProduct", rec.get("subProductCode", "ALL"))
+        # Try multiple date field names
+        date = ""
+        for df in DATE_FIELDS:
+            v = rec.get(df, "")
+            if v:
+                date = str(v)
+                break
         if date > latest:
             latest = date
-        dv = rec.get("dollarVolume")
+        dv = rec.get("dollarVolume", rec.get("totalDollarVolume"))
         out[sub] = {
-            "advances":         rec.get("advances"),
-            "declines":         rec.get("declines"),
-            "unchanged":        rec.get("unchanged"),
+            "advances":         rec.get("advances", rec.get("numberOfAdvances")),
+            "declines":         rec.get("declines", rec.get("numberOfDeclines")),
+            "unchanged":        rec.get("unchanged", rec.get("numberOfUnchanged")),
             "total":            (rec.get("advances") or 0) + (rec.get("declines") or 0) + (rec.get("unchanged") or 0),
-            "highs_52w":        rec.get("fiftyTwoWeekHighs"),
-            "lows_52w":         rec.get("fiftyTwoWeekLows"),
+            "highs_52w":        rec.get("fiftyTwoWeekHighs", rec.get("weekHighs")),
+            "lows_52w":         rec.get("fiftyTwoWeekLows",  rec.get("weekLows")),
             "dollar_volume_mm": round(dv / 1e6, 1) if dv else None,
         }
     return out, latest
