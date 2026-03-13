@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-03-13T00:14:27.139969+00:00",
+  "last_updated": "2026-03-13T00:21:51.393145+00:00",
   "errors": {},
   "us_treasury": {
     "date": "2026-03-12",
@@ -37,12 +37,24 @@
   "fred": {
     "ig_spread_bps": 0.88,
     "ig_date": "2026-03-11",
+    "ig_chg_1d": 0.0,
+    "ig_chg_1w": 0.04,
+    "ig_chg_1m": 0.11,
     "hy_spread_bps": 3.09,
     "hy_date": "2026-03-11",
+    "hy_chg_1d": 0.0,
+    "hy_chg_1w": -0.04,
+    "hy_chg_1m": 0.25,
     "sofr": 3.64,
     "sofr_date": "2026-03-11",
+    "sofr_chg_1d": 0.0,
+    "sofr_chg_1w": -0.01,
+    "sofr_chg_1m": -0.01,
     "t10y2y": 0.51,
     "t10y2y_date": "2026-03-12",
+    "t10y2y_chg_1d": 0.0,
+    "t10y2y_chg_1w": -0.08,
+    "t10y2y_chg_1m": -0.15,
     "spread_history_labels": [
       "2024-04",
       "2024-05",
