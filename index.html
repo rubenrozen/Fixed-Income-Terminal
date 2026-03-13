@@ -783,7 +783,7 @@ function buildFREDCreditTable() {
 
 function buildFREDCreditNote() {
   const f = DATA?.fred || {};
-  const hist = f.spread_history || [];
+  const hist = f.spread_history_labels || [];
   if (!hist.length) return noData('Spread history not loaded');
   const last = hist[hist.length-1];
   const first = hist[0];
@@ -1116,16 +1116,42 @@ function initYieldCurveChart() {
 function initSpreadChart() {
   const ctx = $('spreadChart'); if(!ctx||spreadChartInst) return;
   const fred = DATA?.fred;
-  if (!fred?.spread_history_labels) { ctx.parentElement.innerHTML = noData('FRED data required for spread history'); return; }
+  if (!fred?.spread_history_labels?.length) { ctx.parentElement.innerHTML = noData('FRED spread history not loaded'); return; }
+  const labels = fred.spread_history_labels;
   spreadChartInst = new Chart(ctx,{type:'line',
-    data:{labels:fred.spread_history_labels,datasets:[
-      {label:'US 2Y-10Y',data:fred.spread_history_us,borderColor:'#f5a623',
-       fill:{target:'origin',above:'rgba(245,166,35,0.05)',below:'rgba(248,81,73,0.12)'},
-       borderWidth:2,tension:0.3,pointRadius:2},
+    data:{labels, datasets:[
+      {label:'HY OAS (bps/10)',
+       data:(fred.spread_history_hy||[]).map(v=>v!=null?+(v/10).toFixed(2):null),
+       borderColor:'#f85149', backgroundColor:'rgba(248,81,73,0.08)',
+       fill:false, borderWidth:2, tension:0.3, pointRadius:1, spanGaps:true},
+      {label:'IG OAS (bps/10)',
+       data:(fred.spread_history_ig||[]).map(v=>v!=null?+(v/10).toFixed(2):null),
+       borderColor:'#58a6ff', backgroundColor:'rgba(88,166,255,0.08)',
+       fill:false, borderWidth:2, tension:0.3, pointRadius:1, spanGaps:true},
+      {label:'2Y–10Y (%)',
+       data:(fred.spread_history_us||[]),
+       borderColor:'#f5a623', backgroundColor:'rgba(245,166,35,0.06)',
+       fill:{target:'origin',above:'rgba(245,166,35,0.05)',below:'rgba(248,81,73,0.10)'},
+       borderWidth:2, tension:0.3, pointRadius:1, spanGaps:true, yAxisID:'y2'},
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{position:'top',labels:{boxWidth:12}},tooltip:{backgroundColor:'#1a2333',borderColor:'#243447',borderWidth:1}},
-      scales:{x:{grid:{color:'#1e2d3d'},ticks:{maxTicksLimit:12,color:'#8b949e'}},y:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e',callback:v=>v.toFixed(2)+'%'},title:{display:true,text:'Spread (%)',color:'#4a5568'}}}}});
+      plugins:{
+        legend:{position:'top',labels:{boxWidth:12,color:'#8b949e',font:{size:10}}},
+        tooltip:{backgroundColor:'#1a2333',borderColor:'#243447',borderWidth:1,
+          callbacks:{label:item=>{
+            const ds=item.dataset.label;
+            const v=item.parsed.y;
+            if(ds.includes('OAS')) return ` ${ds}: ${(v*10).toFixed(0)} bps`;
+            return ` ${ds}: ${v!=null?v.toFixed(2):'—'}%`;
+          }}}
+      },
+      scales:{
+        x:{grid:{color:'#1e2d3d'},ticks:{maxTicksLimit:12,color:'#8b949e'}},
+        y:{grid:{color:'#1e2d3d'},ticks:{color:'#8b949e',callback:v=>(v*10).toFixed(0)+' bps'},
+           title:{display:true,text:'OAS (bps)',color:'#4a5568'},position:'left'},
+        y2:{grid:{drawOnChartArea:false},ticks:{color:'#f5a623',callback:v=>v.toFixed(1)+'%'},
+            title:{display:true,text:'2Y-10Y (%)',color:'#f5a623'},position:'right'},
+      }}});
 }
 
 /* Derivatives — heatmap (illustrative roll structure — no free real-time source exists) */
