@@ -112,14 +112,58 @@ def fetch_fred_series(series_id):
             return {"date": obs["date"], "value": float(obs["value"])}
     raise RuntimeError(f"No valid observations for {series_id}")
 
+def fetch_fred_history(series_id, days=35):
+    """Fetch last N days of daily observations — returns list sorted asc."""
+    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    url = (
+        f"https://api.stlouisfed.org/fred/series/observations"
+        f"?series_id={series_id}&api_key={FRED_KEY}&file_type=json"
+        f"&sort_order=asc&observation_start={start}"
+    )
+    data = fetch_json(url)
+    return [
+        {"date": o["date"], "value": float(o["value"])}
+        for o in data.get("observations", [])
+        if o.get("value") and o["value"] != "."
+    ]
+
+def changes_from_history(history, current):
+    """Compute 1d, 1w, 1m changes vs current value."""
+    if not history or current is None:
+        return {"chg_1d": None, "chg_1w": None, "chg_1m": None}
+    vals = history  # already sorted asc
+    def closest(n_days):
+        target = (datetime.now() - timedelta(days=n_days)).strftime("%Y-%m-%d")
+        past = [h for h in vals if h["date"] <= target]
+        return past[-1]["value"] if past else None
+    p1d = closest(1); p1w = closest(7); p1m = closest(30)
+    return {
+        "chg_1d": round(current - p1d, 2) if p1d is not None else None,
+        "chg_1w": round(current - p1w, 2) if p1w is not None else None,
+        "chg_1m": round(current - p1m, 2) if p1m is not None else None,
+    }
+
 def fetch_fred():
     if not FRED_KEY:
         raise RuntimeError("FRED_API_KEY not set")
+
     ig   = fetch_fred_series("BAMLC0A0CM")
     hy   = fetch_fred_series("BAMLH0A0HYM2")
     sofr = fetch_fred_series("SOFR")
     spr  = fetch_fred_series("T10Y2Y")
-    # 24-month history for the spread chart
+
+    # 35-day daily history for 1d/1w/1m changes
+    ig_hist   = fetch_fred_history("BAMLC0A0CM")
+    hy_hist   = fetch_fred_history("BAMLH0A0HYM2")
+    sofr_hist = fetch_fred_history("SOFR")
+    spr_hist  = fetch_fred_history("T10Y2Y")
+
+    ig_chg   = changes_from_history(ig_hist,   ig["value"])
+    hy_chg   = changes_from_history(hy_hist,   hy["value"])
+    sofr_chg = changes_from_history(sofr_hist, sofr["value"])
+    spr_chg  = changes_from_history(spr_hist,  spr["value"])
+
+    # 24-month history for spread chart
     start = (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
     hist_url = (
         f"https://api.stlouisfed.org/fred/series/observations"
@@ -132,11 +176,12 @@ def fetch_fred():
         if o.get("value") and o["value"] != ".":
             monthly[o["date"][:7]] = float(o["value"])
     keys = sorted(monthly)
+
     return {
-        "ig_spread_bps": ig["value"], "ig_date": ig["date"],
-        "hy_spread_bps": hy["value"], "hy_date": hy["date"],
-        "sofr":          sofr["value"], "sofr_date": sofr["date"],
-        "t10y2y":        spr["value"], "t10y2y_date": spr["date"],
+        "ig_spread_bps": ig["value"],   "ig_date":   ig["date"],   **{f"ig_{k}":  v for k,v in ig_chg.items()},
+        "hy_spread_bps": hy["value"],   "hy_date":   hy["date"],   **{f"hy_{k}":  v for k,v in hy_chg.items()},
+        "sofr":          sofr["value"], "sofr_date": sofr["date"], **{f"sofr_{k}":v for k,v in sofr_chg.items()},
+        "t10y2y":        spr["value"],  "t10y2y_date":spr["date"],**{f"t10y2y_{k}":v for k,v in spr_chg.items()},
         "spread_history_labels": keys[-24:],
         "spread_history_us":     [monthly[k] for k in keys[-24:]],
     }
