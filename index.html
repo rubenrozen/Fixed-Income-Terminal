@@ -331,7 +331,7 @@ function buildHTML() {
         <div class="section-label">China Interbank &amp; Exchange Bond Market</div>
         <div class="grid-2">
           ${buildPanel('Market Overview','ADB Asian Bonds Online · CCDC','pop-left',INFO.cnSec,buildChinaTable())}
-          ${buildPanel('Data Sources','ADB / CCDC / World Bank','pop-right',INFO.tradeTypes,buildChinaSourcesCard())}
+          ${buildPanel('Bond Market Context','China fixed income at a glance','pop-right',INFO.cnSec,buildChinaContextCard())}
         </div>
       </div>
     </div>
@@ -783,18 +783,61 @@ function buildFREDCreditTable() {
 
 function buildFREDCreditNote() {
   const f = DATA?.fred || {};
-  const hist = f.spread_history_labels || [];
-  if (!hist.length) return noData('Spread history not loaded');
-  const last = hist[hist.length-1];
-  const first = hist[0];
-  return `<div style="padding:14px;font-size:10px;line-height:1.9;color:var(--text2)">
-    <b style="color:var(--heading);display:block;margin-bottom:8px">24-Month Spread Summary</b>
-    <div>📈 <b style="color:var(--amber)">Latest IG OAS:</b> ${f.ig_spread_bps!=null?fmtBps(f.ig_spread_bps):'—'}</div>
-    <div>📈 <b style="color:var(--amber)">Latest HY OAS:</b> ${f.hy_spread_bps!=null?fmtBps(f.hy_spread_bps):'—'}</div>
-    <div style="margin-top:8px;font-size:9px;color:var(--text3)">${hist.length} monthly observations · ${first.date||''} → ${last.date||''}</div>
-    <div style="margin-top:8px;padding:8px;background:rgba(88,166,255,0.06);border-radius:4px;font-size:9px;color:var(--text3)">
-    Full history visible in the Yield Curves section → Spread Evolution chart.</div>
+  const ig = f.ig_spread_bps, hy = f.hy_spread_bps;
+  const hist = f.spread_history_ig || [];
+
+  // Compute 24M min/max for IG and HY
+  const igHist = (f.spread_history_ig || []).filter(v=>v!=null);
+  const hyHist = (f.spread_history_hy || []).filter(v=>v!=null);
+  const igMin = igHist.length ? Math.min(...igHist) : null;
+  const igMax = igHist.length ? Math.max(...igHist) : null;
+  const hyMin = hyHist.length ? Math.min(...hyHist) : null;
+  const hyMax = hyHist.length ? Math.max(...hyHist) : null;
+
+  // Percentile of current spread in 24M range
+  const pct = (v, mn, mx) => mn!=null&&mx!=null&&mx>mn ? Math.round((v-mn)/(mx-mn)*100) : null;
+  const igPct = ig!=null ? pct(ig,igMin,igMax) : null;
+  const hyPct = hy!=null ? pct(hy,hyMin,hyMax) : null;
+
+  const gauge = (p) => {
+    if (p==null) return '';
+    const color = p<25?'var(--green)':p>75?'var(--red)':'var(--amber)';
+    const label = p<25?'TIGHT · Risk-on':'p>75?'WIDE · Risk-off':'MODERATE';
+    return `<div style="margin-top:4px;height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden">
+      <div style="width:${p}%;height:100%;background:${color};border-radius:2px;transition:width .5s"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--text3);margin-top:2px">
+        <span>24M low</span><span style="color:${color}">${p}th pct</span><span>24M high</span></div>`;
+  };
+
+  const block = (label, val, min, max, p, color) => {
+    const barColor = p!=null?(p<25?'var(--green)':p>75?'var(--red)':'var(--amber)'):'var(--text3)';
+    return `<div style="padding:10px 12px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-size:10px;font-weight:600;color:var(--text2)">${label}</span>
+        <span style="font-size:16px;font-weight:700;color:${color};font-family:'Bebas Neue',sans-serif;letter-spacing:.04em">${val!=null?fmtBps(val):'—'}</span>
+      </div>
+      ${p!=null ? `<div style="margin-top:6px;height:3px;border-radius:2px;background:rgba(255,255,255,0.07)">
+        <div style="width:${p}%;height:100%;background:${barColor};border-radius:2px"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:2px;font-size:8px;color:var(--text3)">
+          <span>${min!=null?fmtBps(min):''}</span>
+          <span style="color:${barColor}">${p}th pctl · 24M</span>
+          <span>${max!=null?fmtBps(max):''}</span></div>` : ''}
+    </div>`;
+  };
+
+  const how = `<div style="padding:10px 12px 8px">
+    <div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">HOW TO READ SPREADS</div>
+    <div style="font-size:9px;line-height:1.7;color:var(--text3)">
+      <div style="margin-bottom:5px"><span style="color:var(--green)">●</span> <b style="color:var(--text2)">Tight spread</b> — investors accept low premium. Risk-on: demand for credit high, defaults expected low.</div>
+      <div style="margin-bottom:5px"><span style="color:var(--red)">●</span> <b style="color:var(--text2)">Wide spread</b> — investors demand high compensation. Risk-off: recession fear, liquidity stress or default risk rising.</div>
+      <div style="margin-bottom:5px"><span style="color:var(--amber)">●</span> <b style="color:var(--text2)">HY–IG gap</b> — when it widens sharply, lower-rated issuers are stressed first. Leading indicator of credit crunch.</div>
+      <div style="color:var(--text3);font-size:8px;margin-top:4px">Source: ICE BofA indices via FRED · Updated daily</div>
+    </div>
   </div>`;
+
+  return block('IG OAS', ig, igMin, igMax, igPct, 'var(--green)')
+       + block('HY OAS', hy, hyMin, hyMax, hyPct, 'var(--red)')
+       + how;
 }
 
 function buildEURIBORPanel() {
@@ -895,18 +938,73 @@ function buildChinaTable() {
   return html;
 }
 
-function buildChinaSourcesCard() {
-  return `<div style="padding:14px;font-size:10px;line-height:1.8;color:var(--text2)">
-    <b style="color:var(--heading);display:block;margin-bottom:8px">Active China Data Sources</b>
-    <div>📊 <b style="color:var(--amber)">ADB Asian Bonds Online</b><br>
-    <span style="font-size:9px;color:var(--text3)">asianbondsonline.adb.org — yields, market size, outstanding. No key.</span></div>
-    <div style="margin-top:8px">📊 <b style="color:var(--amber)">CCDC (chinabond.com.cn)</b><br>
-    <span style="font-size:9px;color:var(--text3)">China Central Depository — weekly turnover. No key. May have CORS limits.</span></div>
-    <div style="margin-top:8px">📊 <b style="color:var(--amber)">World Bank</b><br>
-    <span style="font-size:9px;color:var(--text3)">GDP ratios, macro indicators. No key.</span></div>
-    <div style="margin-top:12px;padding:8px;background:rgba(245,166,35,0.06);border-radius:4px;font-size:9px;color:var(--text3)">
-    ⚠ Full CGB yield curve via ADB may require the server-side Python fetcher to run — CORS prevents browser-side fetch from these sources.</div>
+function buildChinaContextCard() {
+  const cn  = DATA?.china  || {};
+  const us  = DATA?.us_treasury || {};
+  const ecb = DATA?.ecb    || {};
+  const boj = DATA?.boj    || {};
+
+  // Global 10Y comparison
+  const cgb10  = cn.cgb_10y;
+  const getUST = t => { const i=(us.tenors||[]).indexOf(t); return i>=0?us.yields[i]:null; };
+  const ust10  = getUST('10Y');
+  const ecb10i = (ecb.tenors||[]).indexOf('10Y');
+  const ecb10  = ecb10i>=0 ? ecb.yields[ecb10i] : null;
+  const boj10i = (boj.tenors||[]).indexOf('10Y');
+  const boj10  = boj10i>=0 ? boj.yields[boj10i] : null;
+
+  const row = (flag, label, val, diff) => {
+    const v = val!=null ? fmt(val,2)+'%' : '—';
+    const d = diff!=null ? (diff>0?`<span style="color:var(--red)">+${diff.toFixed(2)}%</span>`:`<span style="color:var(--green)">${diff.toFixed(2)}%</span>`) : '';
+    return `<tr>
+      <td class="t-name">${flag} ${label}</td>
+      <td class="t-val">${v}</td>
+      <td class="t-val">${d}</td>
+    </tr>`;
+  };
+
+  const diffVsCGB = v => (cgb10!=null && v!=null) ? v - cgb10 : null;
+
+  const table = `
+    <div style="padding:10px 12px 4px;font-size:9px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase">10Y Global Comparison vs CGB</div>
+    <table class="bond-table"><thead><tr>
+      <th>Market</th><th>10Y Yield</th><th>vs CGB</th>
+    </tr></thead><tbody>
+      ${row('🇨🇳','CGB (China)', cgb10, null)}
+      ${row('🇺🇸','UST (US)',    ust10,  diffVsCGB(ust10))}
+      ${row('🇩🇪','Bund (EU)',   ecb10,  diffVsCGB(ecb10))}
+      ${row('🇯🇵','JGB (Japan)', boj10,  diffVsCGB(boj10))}
+    </tbody></table>`;
+
+  // China macro context
+  const mc  = cn.market_cap_pct_gdp;
+  const gdp = cn.gdp_usd;
+  const facts = [
+    {label:'Bond Market Size', val:'~$26T', sub:'2nd largest in the world'},
+    {label:'CGB Outstanding',  val:'~$12T', sub:'Central gov + policy banks'},
+    {label:'Foreign Ownership',val:'~3%',   sub:'Predominantly domestic investors'},
+    {label:'PBOC Policy Rate', val:'3.10%', sub:'1Y Medium-Term Lending Facility'},
+  ];
+
+  const cards = facts.map(f=>`
+    <div style="padding:8px 10px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-size:9px;color:var(--text3)">${f.label}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--heading);font-family:'Bebas Neue',sans-serif">${f.val}</span>
+      </div>
+      <div style="font-size:8px;color:var(--text3);margin-top:1px">${f.sub}</div>
+    </div>`).join('');
+
+  const guide = `<div style="padding:10px 12px 8px">
+    <div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">HOW TO READ THIS</div>
+    <div style="font-size:9px;line-height:1.7;color:var(--text3)">
+      <div style="margin-bottom:4px"><span style="color:var(--green)">↓</span> <b style="color:var(--text2)">CGB yield falling</b> — PBOC easing, stimulus expected, or deflation risk.</div>
+      <div style="margin-bottom:4px"><span style="color:var(--amber)">↔</span> <b style="color:var(--text2)">CGB vs UST spread</b> — narrows when USD weakens or China tightens; widens on risk-off or Fed hikes.</div>
+      <div style="font-size:8px;color:var(--text3);margin-top:4px">Sources: OECD MEI_FIN · World Bank · Static context</div>
+    </div>
   </div>`;
+
+  return table + cards + guide;
 }
 
 /* ══════════════════════════════════════
@@ -1215,19 +1313,90 @@ function initChartsForSection(sec){
    INFO TEXTS
 ══════════════════════════════════════ */
 const INFO = {
-  agencySec: {title:'Agency Securities',body:'<p>Weekly trading volume for each <b>US Agency bond issuer</b> in $M notional, sourced from FINRA TRACE.</p><p><b>FNMA (Fannie Mae):</b> funds conforming mortgages via MBS guarantee.</p><p><b>FHLB:</b> Federal Home Loan Banks — advances to depository institutions.</p><p><b>FHLMC (Freddie Mac):</b> secondary mortgage market participant.</p><p><b>GNMA (Ginnie Mae):</b> guarantees MBS backed by FHA/VA loans — explicit US government guarantee.</p>'},
-  tradeTypes:{title:'Trade Type Breakdown',body:'<p>FINRA TRACE classifies bond transactions by counterparty, revealing <b>who drives liquidity</b>.</p><p><b>Affiliate:</b> trades between a broker-dealer and its affiliated entities.</p><p><b>Customer:</b> end-investor (fund manager, insurer, pension) trading through a dealer. Buy = client bought; Sell = client sold to dealer.</p><p><b>Inter-dealer:</b> trades between two registered broker-dealers — the wholesale liquidity layer.</p>'},
-  corp144a:  {title:'Corp 144A Securities',body:'<p><b>Rule 144A</b> bonds are private placements sold only to QIBs (≥$100M AUM). Not SEC-registered but freely resold among QIBs.</p><p><b>Investment Grade (IG):</b> rated BBB-/Baa3 or above — lower default risk, tight spreads.</p><p><b>High Yield (HY):</b> rated below BBB- — higher coupon, wider spreads, elevated default risk.</p><p><b>Convertibles:</b> bonds convertible into equity — hybrid risk/reward profile.</p>'},
-  euSec:     {title:'EU Bond Securities',body:'<p><b>EGB (European Government Bonds):</b> sovereign debt from EU member states. The German Bund is the eurozone risk-free benchmark.</p><p><b>Covered Bonds:</b> bank bonds backed by mortgage/public sector pools. Very high credit quality (Pfandbriefe, Obligations Foncières).</p>'},
-  cnSec:     {title:'China Bond Securities',body:'<p><b>CGB:</b> Ministry of Finance sovereign bonds — risk-free CNY benchmark.</p><p><b>Policy Bank Bonds:</b> CDB, EXIM, ADBC — quasi-sovereign, fund national policy.</p><p><b>Local Gov Bonds:</b> provincial/municipal debt, surged post-2015 swap reform.</p>'},
-  jpSec:     {title:'Japan Bond Securities',body:'<p><b>JGB:</b> MoF sovereign debt. BOJ holds ~50% of outstanding — liquidity structurally impaired by YCC policy.</p><p><b>T-Bills:</b> short-term instruments, heavily used in repo markets.</p><p><b>Samurai:</b> JPY bonds issued by foreign entities in Japan.</p>'},
-  yieldCurve:{title:'Yield Curve',body:'<p>Plots government bond yields from 3M to 30Y. Shape reveals market expectations about growth, inflation, and central bank policy.</p><p><b style="color:var(--green)">Normal:</b> long yields > short yields — healthy growth expected.</p><p><b style="color:var(--red)">Inverted:</b> short yields > long yields — recession signal. Has preceded every US recession since 1955.</p>'},
-  spread2y10y:{title:'2Y–10Y Spread',body:'<p>Most-watched inversion indicator on Wall Street. Source: FRED series T10Y2Y.</p><p><b style="color:var(--red)">Negative (inverted):</b> market expects the Fed to cut rates — recession anticipated.</p><p><b style="color:var(--green)">Positive:</b> normal curve. Wide spread = strong growth or inflation expectations.</p>'},
-  futures:   {title:'Futures Curve Structure',body:'<p>Roll spread = far contract price minus near contract price.</p><p><b style="color:var(--green)">Contango:</b> far > near — cost-to-carry for longs. Common in normal markets.</p><p><b style="color:var(--red)">Backwardation:</b> near > far — positive roll yield. Often signals repo stress or supply squeeze.</p>'},
-  volSurface:{title:'Swaption Vol Surface',body:'<p>ATM normal implied vol (bps) for swaptions across expiry (rows) and swap tenor (columns).</p><p>Low vol = low rate uncertainty. High vol = elevated hedging demand. Read to find where rate risk is priced most aggressively.</p>'},
-  oi:        {title:'Open Interest &amp; Volume',body:'<p><b>Open Interest:</b> outstanding contracts not yet settled. Rising OI + rising price = new longs (bullish).</p><p><b>Volume:</b> contracts traded in session. High volume confirms price moves.</p><p><b>OI/Volume Ratio > 1:</b> position buildup — strong directional commitment.</p>'},
-  govMulti:  {title:'Multi-Country Curves',body:'<p>Superimposing sovereign curves allows comparison of monetary policy stance, term premium, and credit quality.</p><p>Spread compression between 10Y yields (e.g., BTP vs Bund) is the key barometer of eurozone stress.</p>'},
-  spreadMatrix:{title:'Sovereign Spread Matrix',body:'<p>Yield premium vs UST 10Y. <b style="color:var(--green)">Negative</b> = country yields less than US (Germany, Japan). <b style="color:var(--red)">Positive</b> = yield premium reflects credit/inflation/currency risk. 1W Δ shows weekly change in bps.</p>'},
+  agencySec: {title:'Agency Securities',body:`
+    <p>Trading volume for US Agency bonds by issuer, sourced from FINRA TRACE. Advances/declines = issues whose price moved up/down vs prior session.</p>
+    <p><b>FNMA (Fannie Mae):</b> funds conforming mortgages via MBS guarantee.</p>
+    <p><b>FHLB:</b> Federal Home Loan Banks — advances to depository institutions.</p>
+    <p><b>FHLMC (Freddie Mac):</b> secondary mortgage market participant.</p>
+    <p><b>GNMA (Ginnie Mae):</b> guarantees MBS backed by FHA/VA loans — explicit US government guarantee.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> High $ volume + high advances = agency market is risk-on, spreads likely tightening. When advances collapse and declines surge, it often precedes spread widening in MBS and corporate bonds.</p>`},
+  tradeTypes:{title:'US Credit Market',body:`
+    <p>Option-Adjusted Spread (OAS) measures how much extra yield a corporate bond pays over a matching-maturity Treasury, after stripping out embedded options (calls, puts).</p>
+    <p><b>Investment Grade OAS:</b> premium paid by BBB+ and above issuers. Normal range: 80–150 bps.</p>
+    <p><b>High Yield OAS:</b> premium for sub-investment grade. Normal range: 300–600 bps. Spikes above 800 signal stress.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> Watch the <b>HY–IG gap</b>. When it widens suddenly, lower-rated borrowers are under stress first — a leading indicator of broader credit tightening. If both IG and HY widen simultaneously, it's systemic.</p>`},
+  corp144a:  {title:'Corp 144A & Credit Spreads',body:`
+    <p><b>Rule 144A</b> bonds are private placements sold only to QIBs (institutions with ≥$100M AUM). Not SEC-registered but freely resold among QIBs — faster to market than public debt.</p>
+    <p><b>Investment Grade (IG):</b> rated BBB-/Baa3 or above. Tight spreads, pension/insurance demand. OAS typically 80–150 bps.</p>
+    <p><b>High Yield (HY):</b> rated below BBB-. Higher coupon compensates for default risk. OAS typically 300–600 bps.</p>
+    <p><b>Convertibles:</b> bonds convertible into equity — hybrid risk/reward. Trade on equity vol as much as rates.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> Advances > Declines = bond prices rising, yield falling, credit market healthy. 52W Lows cluster = selloff. Compare $ volume trends — shrinking volume with widening spreads signals illiquidity.</p>`},
+  euSec:     {title:'EU Bond Securities',body:`
+    <p><b>EGB (European Government Bonds):</b> sovereign debt from EU member states. The German Bund is the eurozone risk-free benchmark.</p>
+    <p><b>Covered Bonds:</b> bank bonds backed by mortgage/public sector pools. Pfandbriefe (Germany), Obligations Foncières (France) — very high quality.</p>
+    <p><b>ECB AAA Curve:</b> fitted yield curve for AAA-rated eurozone sovereigns (ex-Germany). Represents the "risk-free" EUR term structure.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> Watch the Bund 10Y as the EUR safe-haven anchor. Rising Bund yields = ECB tightening or inflation expectations up. Spread of BTP (Italy) or OAT (France) over Bund = eurozone sovereign stress barometer.</p>`},
+  cnSec:     {title:'China Bond Securities',body:`
+    <p><b>CGB:</b> Ministry of Finance sovereign bonds — CNY risk-free benchmark. PBOC uses CGB market for open market operations.</p>
+    <p><b>Policy Bank Bonds:</b> CDB (China Development Bank), EXIM Bank, ADBC — quasi-sovereign, fund Belt & Road and rural policy.</p>
+    <p><b>Local Gov Bonds:</b> provincial/municipal debt, surged post-2015 debt swap reform. Now ~$10T outstanding.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> CGB 10Y falling = PBOC easing, deflation risk, or capital flight to bonds. CGB 10Y rising = reflation trade or fiscal stimulus crowding out. CGB–UST spread turning negative = rare signal of extreme China monetary ease vs Fed tightening.</p>`},
+  jpSec:     {title:'Japan Bond Securities',body:`
+    <p><b>JGB:</b> MoF sovereign debt. BOJ holds ~53% of outstanding — liquidity structurally impaired. YCC (Yield Curve Control) policy pegged 10Y near 0% until 2024.</p>
+    <p><b>T-Bills:</b> short-term JGBs, heavily used in repo and FX swap markets.</p>
+    <p><b>Samurai Bonds:</b> JPY-denominated bonds issued by foreign entities in Japan.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> JGB 10Y rising = BOJ normalisation trade. Watch 30Y — it trades more freely than the 10Y and reflects real term premium. 2s10s steepening = BOJ exiting YCC, global duration risk rising. Flat/inverted = demand for long duration despite BOJ tightening.</p>`},
+  yieldCurve:{title:'Yield Curve',body:`
+    <p>Plots government bond yields from 3M to 30Y. Shape reveals market expectations about growth, inflation, and central bank policy over time.</p>
+    <p><b style="color:var(--green)">Normal (upward sloping):</b> long yields > short yields. Healthy growth, inflation expectations in check.</p>
+    <p><b style="color:var(--red)">Inverted:</b> short yields > long yields. Market prices Fed cuts ahead — has preceded every US recession since 1955 with ~12–18 month lead.</p>
+    <p><b style="color:var(--amber)">Flat / Humped:</b> transition phase. Watch 2Y vs 10Y as the key signal.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> Compare the curve shape day-over-day. Bull flattening (short end up, long end flat) = Fed hike priced in, long bonds bid. Bear steepening (long end rises) = inflation premium or fiscal worry. Parallel shift = global risk sentiment change.</p>`},
+  spread2y10y:{title:'2Y–10Y Spread & OAS History',body:`
+    <p>The 2Y–10Y Treasury spread is the most-watched inversion indicator. Source: FRED T10Y2Y. IG and HY OAS from ICE BofA indices.</p>
+    <p><b style="color:var(--red)">2Y–10Y negative:</b> market expects Fed cuts — recession anticipated within 12–18 months historically.</p>
+    <p><b style="color:var(--green)">2Y–10Y positive:</b> normal curve. Wide = strong growth or inflation expectations.</p>
+    <p><b>IG OAS:</b> Investment Grade Option-Adjusted Spread over Treasuries. Normal: 80–150 bps.</p>
+    <p><b>HY OAS:</b> High Yield spread. Normal: 300–500 bps. Spike > 800 bps = credit stress.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> Watch all 3 lines together. When 2Y–10Y inverts AND spreads widen simultaneously → credit contraction imminent. When 2Y–10Y steepens while spreads tighten → bull market re-opening after stress.</p>`},
+  futures:   {title:'Futures Curve Structure',body:`
+    <p>Roll spread = far contract price minus near contract price. Shows cost of rolling a futures position forward in time.</p>
+    <p><b style="color:var(--green)">Contango (positive roll):</b> far > near. Carry cost for longs. Normal in calm markets — short the roll earns carry.</p>
+    <p><b style="color:var(--red)">Backwardation (negative roll):</b> near > far. Positive roll yield for longs. Often signals repo stress, supply squeeze, or flight-to-quality for specific bonds.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> Deep backwardation in a specific tenor = that part of the curve has a delivery squeeze or is being hoarded. Contango steepening = funding costs rising, harder to lever duration. Cross-country comparison (UST vs Bund vs JGB) reveals relative monetary policy trajectory.</p>`},
+  volSurface:{title:'Swaption Vol Surface',body:`
+    <p>ATM normal implied volatility (bps/year) for swaptions. Rows = option expiry. Columns = underlying swap tenor. Each cell = the market price of optionality on rates at that point.</p>
+    <p><b>Low vol (dark green):</b> market is calm, rates expected to stay stable. Cheap to hedge.</p>
+    <p><b>High vol (dark red):</b> elevated uncertainty, large rate moves expected. Expensive to hedge, often before Fed decisions or macro prints.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> A vol smile (high at short and long expiry, low in middle) signals near-term policy uncertainty + long-term structural uncertainty. Rising front-left corner (1M×1Y) = immediate rate shock expected. Rising back-right corner (5Y×30Y) = long-run inflation fears.</p>`},
+  oi:        {title:'Open Interest & Volume',body:`
+    <p><b>Open Interest (OI):</b> number of outstanding futures contracts not yet settled. Reflects committed positions in the market.</p>
+    <p><b>Volume:</b> contracts traded in the session. Confirms or denies price moves.</p>
+    <p><b>OI/Volume Ratio > 1:</b> position buildup — strong directional commitment by participants.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> Rising OI + rising price = new longs entering (bullish). Rising OI + falling price = new shorts entering (bearish). Falling OI = positions being closed — trend losing conviction. Spike in volume with flat OI = churning, not trend.</p>`},
+  govMulti:  {title:'Multi-Country Curves',body:`
+    <p>Superimposing sovereign yield curves across countries reveals differences in monetary policy stance, inflation expectations, and credit quality.</p>
+    <p>Each country's curve reflects its central bank rate path and domestic inflation dynamics.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> When the UST curve is above all others at the short end → USD rates highest globally, dollar likely strong. When Japan's curve is uniquely flat → BOJ lagging normalization. Convergence of long-end yields across countries signals synchronized global growth/inflation expectations. Divergence signals policy decoupling.</p>`},
+  spreadMatrix:{title:'Sovereign Spread Matrix',body:`
+    <p>Yield differential of each country's 10Y bond vs the US Treasury 10Y benchmark.</p>
+    <p><b style="color:var(--green)">Negative spread:</b> country yields <i>less</i> than US — Germany, Japan, Switzerland typical. Reflects safe-haven or policy-driven compression.</p>
+    <p><b style="color:var(--red)">Positive spread:</b> yield premium over UST — reflects credit risk, inflation risk, or currency risk.</p>
+    <p><b>1W Δ:</b> weekly change in basis points — shows directional momentum.</p>
+    <hr style="border-color:var(--border);margin:8px 0">
+    <p style="color:var(--text3);font-size:10px"><b style="color:var(--heading)">HOW TO READ:</b> Rapidly widening spreads in EM (Brazil, Mexico) → capital outflows, currency pressure. EU periphery widening (Italy, Spain) → eurozone fiscal stress. Japan spread turning positive → BOJ normalization finally priced by markets. When all spreads narrow simultaneously → global risk appetite high, dollar weakening.</p>`},
 };
 
 /* ══════════════════════════════════════
