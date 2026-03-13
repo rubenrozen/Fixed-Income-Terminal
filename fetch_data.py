@@ -169,27 +169,38 @@ def fetch_fred():
     sofr_chg = changes_from_history(sofr_hist, sofr["value"])
     spr_chg  = changes_from_history(spr_hist,  spr["value"])
 
-    # 24-month history for spread chart
+    # 24-month monthly history for spread chart (T10Y2Y + IG OAS + HY OAS)
     start = (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
-    hist_url = (
-        f"https://api.stlouisfed.org/fred/series/observations"
-        f"?series_id=T10Y2Y&api_key={FRED_KEY}&file_type=json"
-        f"&sort_order=asc&observation_start={start}"
-    )
-    hist_raw = fetch_json(hist_url)
-    monthly = {}
-    for o in hist_raw.get("observations", []):
-        if o.get("value") and o["value"] != ".":
-            monthly[o["date"][:7]] = float(o["value"])
-    keys = sorted(monthly)
+
+    def _monthly_history(series_id):
+        url = (
+            f"https://api.stlouisfed.org/fred/series/observations"
+            f"?series_id={series_id}&api_key={FRED_KEY}&file_type=json"
+            f"&sort_order=asc&observation_start={start}"
+        )
+        raw = fetch_json(url)
+        monthly = {}
+        for o in raw.get("observations", []):
+            if o.get("value") and o["value"] != ".":
+                monthly[o["date"][:7]] = round(float(o["value"]), 3)
+        return monthly
+
+    hist_t10y2y = _monthly_history("T10Y2Y")
+    hist_ig_24m = _monthly_history("BAMLC0A0CM")
+    hist_hy_24m = _monthly_history("BAMLH0A0HYM2")
+
+    all_keys = sorted(set(hist_t10y2y) | set(hist_ig_24m) | set(hist_hy_24m))
+    labels   = all_keys[-24:]
 
     return {
         "ig_spread_bps": ig["value"],   "ig_date":   ig["date"],   **{f"ig_{k}":  v for k,v in ig_chg.items()},
         "hy_spread_bps": hy["value"],   "hy_date":   hy["date"],   **{f"hy_{k}":  v for k,v in hy_chg.items()},
         "sofr":          sofr["value"], "sofr_date": sofr["date"], **{f"sofr_{k}":v for k,v in sofr_chg.items()},
         "t10y2y":        spr["value"],  "t10y2y_date":spr["date"],**{f"t10y2y_{k}":v for k,v in spr_chg.items()},
-        "spread_history_labels": keys[-24:],
-        "spread_history_us":     [monthly[k] for k in keys[-24:]],
+        "spread_history_labels": labels,
+        "spread_history_us":     [hist_t10y2y.get(k) for k in labels],
+        "spread_history_ig":     [hist_ig_24m.get(k)  for k in labels],
+        "spread_history_hy":     [hist_hy_24m.get(k)  for k in labels],
     }
 
 
