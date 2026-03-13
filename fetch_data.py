@@ -1,29 +1,35 @@
 """
-Fixed Income Terminal — Data Fetcher v2
+Fixed Income Terminal — Data Fetcher v3
 =========================================
 Sources (all free):
   US Treasury XML         → US yield curve        (no key)
   FRED API                → spreads, SOFR, history (free key: fred.stlouisfed.org/docs/api/api_key.html)
   ECB SDW REST API        → EU/Bund curves         (no key)
   Bank of Japan CSV       → JGB yields             (no key)
+  FINRA Fixed Income API  → Agency (FNMA/FHLB/FHLMC) + Corp (IG/HY/Conv) market breadth
+                            OAuth2 client credentials — free account at developer.finra.org
   World Bank API          → China macro data       (no key)
-  OECD SDMX API          → China 10Y yield        (no key)
+  OECD SDMX API           → China 10Y yield        (no key)
   FRED (UK series)        → Gilt yields            (same FRED key)
 
 Environment variables (set as GitHub Secrets):
   FRED_API_KEY          → FRED
+  FINRA_API_KEY         → FINRA OAuth2 client_id
+  FINRA_CLIENT_SECRET   → FINRA OAuth2 client_secret
 
 Run:  python fetch_data.py
 Out:  data/bonds.json
 """
 
-import json, os, sys, re
+import json, os, sys, re, base64
 from datetime import datetime, timezone, timedelta
 import urllib.request, urllib.parse, urllib.error
 import xml.etree.ElementTree as ET
 
-OUTPUT_FILE = "data/bonds.json"
-FRED_KEY    = os.environ.get("FRED_API_KEY", "")
+OUTPUT_FILE         = "data/bonds.json"
+FRED_KEY            = os.environ.get("FRED_API_KEY", "")
+FINRA_CLIENT_ID     = os.environ.get("FINRA_API_KEY", "")
+FINRA_CLIENT_SECRET = os.environ.get("FINRA_CLIENT_SECRET", "")
 
 UA = "FixedIncomeTerminal/2.0 (github.com/rubenrozen/Fixed-Income-Terminal)"
 
@@ -188,7 +194,122 @@ def fetch_fred():
 
 
 # ═══════════════════════════════════════════
-# 3. ECB STATISTICAL DATA WAREHOUSE
+# 3. FINRA — Agency & Corporate Market Breadth
+#    api.finra.org — OAuth2 client credentials
+#    Free account at developer.finra.org
+#
+#  subProduct values:
+#    Agency  : ALL, FNMA, FHLB, FHLMC, GNMA, FFCB, TVA, OTHER
+#    Corp    : ALL, INVESTMENT_GRADE, HIGH_YIELD, CONVERTIBLE
+#    144A    : ALL, INVESTMENT_GRADE, HIGH_YIELD, CONVERTIBLE
+# ═══════════════════════════════════════════
+FINRA_TOKEN_URL = "https://ews.fip.finra.org/fip/rest/ews/oauth2/access_token?grant_type=client_credentials"
+FINRA_API_BASE  = "https://api.finra.org/data/group/fixedIncomeMarket/name"
+
+_finra_token_cache = {"token": None, "expires": 0}
+
+def _finra_get_token():
+    now = datetime.now(timezone.utc).timestamp()
+    if _finra_token_cache["token"] and now < _finra_token_cache["expires"] - 30:
+        return _finra_token_cache["token"]
+    if not FINRA_CLIENT_ID or not FINRA_CLIENT_SECRET:
+        raise RuntimeError("FINRA_API_KEY / FINRA_CLIENT_SECRET not set")
+    creds = base64.b64encode(f"{FINRA_CLIENT_ID}:{FINRA_CLIENT_SECRET}".encode()).decode()
+    req   = urllib.request.Request(
+        FINRA_TOKEN_URL, data=b"",
+        headers={"Authorization": f"Basic {creds}", "Content-Length": "0"}, method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=20) as r:
+        tok = json.loads(r.read().decode())
+    token = tok.get("access_token")
+    if not token:
+        raise RuntimeError(f"FINRA token missing: {tok}")
+    expires_in = int(tok.get("expires_in", 1800))
+    _finra_token_cache.update({"token": token, "expires": now + expires_in})
+    print(f"    FINRA token OK (expires in {expires_in}s)")
+    return token
+
+def _finra_query(endpoint, limit=500):
+    token = _finra_get_token()
+    url   = f"{FINRA_API_BASE}/{endpoint}"
+    body  = json.dumps({"limit": limit}).encode()
+    req   = urllib.request.Request(url, data=body, headers={
+        "Authorization": f"Bearer {token}",
+        "Content-Type":  "application/json",
+        "Accept":        "application/json",
+        "User-Agent":    UA,
+    }, method="POST")
+    with urllib.request.urlopen(req, timeout=25) as r:
+        return json.loads(r.read().decode())
+
+def _parse_breadth(records):
+    """Convert FINRA market breadth list → dict keyed by subProduct."""
+    out, latest = {}, ""
+    for rec in records:
+        sub  = rec.get("subProduct", "ALL")
+        date = rec.get("tradeDate", "")
+        if date > latest:
+            latest = date
+        dv = rec.get("dollarVolume")
+        out[sub] = {
+            "advances":         rec.get("advances"),
+            "declines":         rec.get("declines"),
+            "unchanged":        rec.get("unchanged"),
+            "total":            (rec.get("advances") or 0) + (rec.get("declines") or 0) + (rec.get("unchanged") or 0),
+            "highs_52w":        rec.get("fiftyTwoWeekHighs"),
+            "lows_52w":         rec.get("fiftyTwoWeekLows"),
+            "dollar_volume_mm": round(dv / 1e6, 1) if dv else None,
+        }
+    return out, latest
+
+def fetch_finra():
+    result = {}
+
+    # Agency
+    for ep in ["agencyMarketBreadth", "agencyDebtMarketBreadth"]:
+        try:
+            recs = _finra_query(ep)
+            if isinstance(recs, list) and recs:
+                parsed, date = _parse_breadth(recs)
+                result["agency"] = parsed
+                result["date"]   = date
+                print(f"    FINRA agency: {list(parsed.keys())}, date={date}")
+                break
+        except Exception as e:
+            print(f"    FINRA {ep}: {e}")
+
+    # Corporate
+    for ep in ["corporateMarketBreadth", "corporateDebtMarketBreadth"]:
+        try:
+            recs = _finra_query(ep)
+            if isinstance(recs, list) and recs:
+                parsed, date = _parse_breadth(recs)
+                result["corp"] = parsed
+                if not result.get("date"): result["date"] = date
+                print(f"    FINRA corp: {list(parsed.keys())}, date={date}")
+                break
+        except Exception as e:
+            print(f"    FINRA {ep}: {e}")
+
+    # Corporate 144A
+    for ep in ["corporate144AMarketBreadth", "corporate144ADebtMarketBreadth"]:
+        try:
+            recs = _finra_query(ep)
+            if isinstance(recs, list) and recs:
+                parsed, date = _parse_breadth(recs)
+                result["corp144a"] = parsed
+                print(f"    FINRA 144A: {list(parsed.keys())}, date={date}")
+                break
+        except Exception as e:
+            print(f"    FINRA {ep}: {e}")
+
+    if not result:
+        raise RuntimeError("All FINRA endpoints failed — check credentials or plan access")
+    return result
+
+
+# ═══════════════════════════════════════════
+# 4. ECB STATISTICAL DATA WAREHOUSE
 #    Both old (sdw-wsrest) and new (data-api) endpoints tried
 #    Wildcard CSV bulk download used as final fallback
 # ═══════════════════════════════════════════
@@ -563,19 +684,21 @@ def fetch_uk_gilts():
 # MAIN
 # ═══════════════════════════════════════════
 def main():
-    print("\n🔄 Fixed Income Terminal — Data Fetcher v2")
+    print("\n🔄 Fixed Income Terminal — Data Fetcher v3")
     print(f"   Timestamp: {datetime.now(timezone.utc).isoformat()}")
-    print(f"   FRED key:  {'✅ set' if FRED_KEY else '❌ missing — set FRED_API_KEY'}\n")
+    print(f"   FRED key:  {'✅ set' if FRED_KEY else '❌ missing — set FRED_API_KEY'}")
+    print(f"   FINRA:     {'✅ set' if (FINRA_CLIENT_ID and FINRA_CLIENT_SECRET) else '⚠️  missing — set FINRA_API_KEY + FINRA_CLIENT_SECRET'}\n")
 
     output = {"last_updated": datetime.now(timezone.utc).isoformat(), "errors": {}}
 
     steps = [
-        ("US Treasury yield curve", fetch_us_treasury,  "us_treasury"),
-        ("FRED spreads + history",  fetch_fred,         "fred"),
-        ("ECB yield curves",        fetch_ecb,          "ecb"),
-        ("Bank of Japan JGB",       fetch_boj,          "boj"),
-        ("China bond market",       fetch_china_bonds,  "china"),
-        ("UK Gilt yields",          fetch_uk_gilts,     "uk_gilts"),
+        ("US Treasury yield curve",        fetch_us_treasury,  "us_treasury"),
+        ("FRED spreads + history",         fetch_fred,         "fred"),
+        ("FINRA Agency + Corp breadth",    fetch_finra,        "finra"),
+        ("ECB yield curves",               fetch_ecb,          "ecb"),
+        ("Bank of Japan JGB",              fetch_boj,          "boj"),
+        ("China bond market",              fetch_china_bonds,  "china"),
+        ("UK Gilt yields",                 fetch_uk_gilts,     "uk_gilts"),
     ]
 
     for label, fn, key in steps:
